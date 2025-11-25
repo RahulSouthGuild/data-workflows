@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # StarRocks Frontend (FE) - Production Configuration
+  starrocks-fe:
+    image: starrocks/fe-ubuntu:3.3-latest
+    container_name: starrocks-fe
+    hostname: starrocks-fe
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/starrocks/fe/bin/start_fe.sh
+        tail -f /dev/null
+    ports:
+      - "8030:8030"  # HTTP server (Web UI)
+      - "9020:9020"  # RPC port (inter-FE communication)
+      - "9030:9030"  # MySQL protocol port (client connections)
+    volumes:
+      - starrocks-fe-meta:/opt/starrocks/fe/meta
+      - starrocks-fe-log:/opt/starrocks/fe/log
+      - starrocks-fe-conf:/opt/starrocks/fe/conf
+      - ./db/init:/docker-entrypoint-initdb.d
+    environment:
+      # JVM Heap Settings - Adjust based on available memory
+      - JAVA_OPTS=-Xmx8g -Xms8g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+      # FE Configuration
+      - FE_SERVERS=fe:starrocks-fe:9010
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+    networks:
+      - starrocks-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8030/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # StarRocks Backend (BE) - Production Configuration
+  starrocks-be:
+    image: starrocks/be-ubuntu:3.3-latest
+    container_name: starrocks-be
+    hostname: starrocks-be
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/starrocks/be/bin/start_be.sh
+        tail -f /dev/null
+    depends_on:
+      starrocks-fe:
+        condition: service_healthy
+    ports:
+      - "8040:8040"  # HTTP server port
+      - "9060:9060"  # Thrift server port (FE-BE communication)
+      - "8060:8060"  # bRPC port
+      - "9050:9050"  # Heartbeat service port
+    volumes:
+      - starrocks-be-storage:/opt/starrocks/be/storage
+      - starrocks-be-log:/opt/starrocks/be/log
+      - starrocks-be-conf:/opt/starrocks/be/conf
+    environment:
+      # Memory limit for BE process (90% is default, adjust for production)
+      - BE_MEM_LIMIT=85%
+      # Storage root path with medium type
+      - STORAGE_ROOT_PATH=/opt/starrocks/be/storage,medium:ssd
+      # FE address for registration
+      - FE_QUERY_PORT=9030
+      - FE_HOST=starrocks-fe
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 32G
+        reservations:
+          cpus: '4'
+          memory: 16G
+    networks:
+      - starrocks-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "5"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+      nproc:
+        soft: 65535
+        hard: 65535
+
+  # Database Initialization - Runs once to create database and user
+  starrocks-init:
+    image: mysql:8.0
+    container_name: starrocks-init
+    depends_on:
+      starrocks-fe:
+        condition: service_healthy
+    volumes:
+      - ./db/init/init-db.sh:/init-db.sh
+    networks:
+      - starrocks-network
+    command: bash /init-db.sh
+    restart: "no"
+
+volumes:
+  # StarRocks volumes - Production configuration with driver options
+  starrocks-fe-meta:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/starrocks/fe-meta
+  starrocks-fe-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/starrocks/fe-log
+  starrocks-fe-conf:
+    driver: local
+  starrocks-be-storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/starrocks/be-storage
+  starrocks-be-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/starrocks/be-log
+  starrocks-be-conf:
+    driver: local
+
+networks:
+  starrocks-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pidilite-datawiz"
+version = "2.0.0"
+description = "Pidilite DataWiz - ETL Pipeline for StarRocks with Azure Blob Storage"
+authors = [
+    {name = "Rahul", email = "rahul@pidilite.com"}
+]
+requires-python = ">=3.9"
+readme = "README.md"
+license = {text = "MIT"}
+
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "pyarrow>=14.0.0",
+    "pandas>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "pymongo>=4.6.0",
+    "azure-storage-blob>=12.19.0",
+    "apscheduler>=3.10.0",
+    "opentelemetry-api>=1.22.0",
+    "opentelemetry-sdk>=1.22.0",
+    "opentelemetry-instrumentation>=0.43b0",
+    "opentelemetry-exporter-otlp>=1.22.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.31.0",
+    "tenacity>=8.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "isort>=5.12.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["config*", "core*", "scheduler*", "notifications*", "db*", "observability*", "utils*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=. --cov-report=html --cov-report=term"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

@@ -1,0 +1,177 @@
+# Pidilite DataWiz - Job Schedule Configuration
+# Timezone: Asia/Kolkata
+
+schedules:
+  # ==========================================
+  # EVENING JOBS - Dimension Tables
+  # ==========================================
+  # Run at 6:00 PM daily - Load dimensional data first
+
+  evening_dimension_sync:
+    schedule: "0 18 * * *"  # 6:00 PM daily
+    job_module: scheduler.daily.evening.dimension_sync
+    job_class: DimensionSyncJob
+    enabled: true
+    timeout: 3600  # 1 hour
+    retry_count: 3
+    notify_on_failure: true
+    description: "Sync dimension tables from Azure blob storage"
+
+  evening_tsr_hierarchy:
+    schedule: "30 18 * * *"  # 6:30 PM daily
+    job_module: scheduler.daily.evening.tsr_hierarchy
+    job_class: TSRHierarchyJob
+    enabled: true
+    timeout: 1800  # 30 minutes
+    retry_count: 2
+    notify_on_failure: true
+    description: "Update TSR hierarchy and RLS master tables"
+
+  evening_refresh_matviews:
+    schedule: "0 19 * * *"  # 7:00 PM daily
+    job_module: scheduler.daily.evening.refresh_matviews
+    job_class: RefreshMatViewsJob
+    enabled: true
+    timeout: 3600  # 1 hour
+    retry_count: 2
+    notify_on_failure: true
+    description: "Refresh materialized views for reporting"
+
+  evening_business_constants:
+    schedule: "30 19 * * *"  # 7:30 PM daily
+    job_module: scheduler.daily.evening.business_constants
+    job_class: BusinessConstantsJob
+    enabled: true
+    timeout: 600  # 10 minutes
+    retry_count: 2
+    notify_on_failure: true
+    description: "Update business constants in MongoDB"
+
+  # ==========================================
+  # MORNING JOBS - Fact Tables
+  # ==========================================
+  # Run at 8:00 AM daily - Load fact data after dimensions
+
+  morning_blob_backup:
+    schedule: "0 8 * * *"  # 8:00 AM daily
+    job_module: scheduler.daily.morning.blob_backup
+    job_class: BlobBackupJob
+    enabled: true
+    timeout: 7200  # 2 hours
+    retry_count: 3
+    notify_on_failure: true
+    description: "Backup Azure blob files locally"
+
+  morning_fis_incremental:
+    schedule: "0 9 * * *"  # 9:00 AM daily
+    job_module: scheduler.daily.morning.fis_incremental
+    job_class: FISIncrementalJob
+    enabled: true
+    timeout: 5400  # 1.5 hours
+    retry_count: 3
+    notify_on_failure: true
+    description: "Incremental load of FIS (Fact Inventory Sales) table"
+
+  morning_fid_incremental:
+    schedule: "30 10 * * *"  # 10:30 AM daily
+    job_module: scheduler.daily.morning.fid_incremental
+    job_class: FIDIncrementalJob
+    enabled: true
+    timeout: 5400  # 1.5 hours
+    retry_count: 3
+    notify_on_failure: true
+    description: "Incremental load of FID (Fact Inventory Distribution) table"
+
+  morning_dd_logic:
+    schedule: "0 12 * * *"  # 12:00 PM daily
+    job_module: scheduler.daily.morning.dd_logic
+    job_class: DDLogicJob
+    enabled: true
+    timeout: 3600  # 1 hour
+    retry_count: 2
+    notify_on_failure: true
+    description: "Run DD (Distributor Dashboard) business logic"
+
+  # ==========================================
+  # DAILY SUMMARY & MAINTENANCE
+  # ==========================================
+
+  daily_summary:
+    schedule: "0 20 * * *"  # 8:00 PM daily
+    job_module: scheduler.daily.summary
+    job_class: DailySummaryJob
+    enabled: true
+    timeout: 600  # 10 minutes
+    retry_count: 1
+    notify_on_failure: false
+    notify_on_success: true
+    description: "Generate and email daily summary report"
+
+  daily_db_backup:
+    schedule: "0 2 * * *"  # 2:00 AM daily
+    job_module: scheduler.daily.db_backup
+    job_class: DatabaseBackupJob
+    enabled: true
+    timeout: 7200  # 2 hours
+    retry_count: 2
+    notify_on_failure: true
+    description: "Backup StarRocks database"
+
+  disable_maintenance_mode:
+    schedule: "0 6 * * *"  # 6:00 AM daily
+    job_module: scheduler.daily.maintenance_mode
+    job_class: MaintenanceModeJob
+    enabled: true
+    timeout: 60  # 1 minute
+    retry_count: 1
+    notify_on_failure: true
+    description: "Disable maintenance mode if enabled"
+
+  # ==========================================
+  # MONTHLY JOBS
+  # ==========================================
+
+  monthly_vacuum:
+    schedule: "0 3 1 * *"  # 3:00 AM on 1st of every month
+    job_module: scheduler.monthly.vacuum_datawiz
+    job_class: VacuumDatawizJob
+    enabled: true
+    timeout: 14400  # 4 hours
+    retry_count: 1
+    notify_on_failure: true
+    description: "Vacuum and optimize StarRocks database"
+
+# Global Configuration
+global_config:
+  timezone: "Asia/Kolkata"
+  max_concurrent_jobs: 3
+  default_timeout: 3600
+  default_retry_count: 2
+  email_on_failure: true
+  email_on_success: false
+  max_job_history: 100
+
+# Notification Configuration
+notifications:
+  email:
+    enabled: true
+    on_success: false  # Only for specific jobs
+    on_failure: true
+    include_logs: true
+    max_log_lines: 100
+
+  # Future: Slack, MS Teams
+  slack:
+    enabled: false
+    webhook_url: ""
+
+  teams:
+    enabled: false
+    webhook_url: ""
+
+# Monitoring Configuration
+monitoring:
+  health_check_interval: 300  # 5 minutes
+  job_timeout_warning: 0.8  # Warn at 80% of timeout
+  disk_space_threshold: 0.9  # Warn at 90% disk usage
+  log_retention_days: 30

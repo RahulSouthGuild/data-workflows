@@ -1,0 +1,69 @@
+/home/rahul/RahulSouthGuild/pidilite_datawiz/
+├── archive/
+│   ├── pipeline_historical/
+│   ├── pipeline_incremental/
+│   ├── prompts/
+│   ├── timescale_db/
+│   └── tmp/
+├── config/
+│   ├── database.py
+│   ├── __init__.py
+│   ├── logging_config.py
+│   ├── observability.py
+│   ├── settings.py
+│   └── storage.py
+├── core/
+│   ├── extractors/
+│   ├── jobs/
+│   ├── loaders/
+│   └── transformers/
+├── data/
+│   ├── data_historical/
+│   ├── data_incremental/
+│   └── temp/
+├── db/
+│   ├── benchmarking/
+│   ├── indexes/
+│   ├── migrations/
+│   ├── rls/
+│   ├── scripts/
+│   ├── sql/
+│   └── __init__.py
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── migration_guide.md
+│   └── QUICK_START.md
+├── logs/
+│   ├── etl/
+│   ├── notifications/
+│   └── scheduler/
+├── notifications/
+│   ├── handlers/
+│   ├── templates/
+│   ├── utils/
+│   └── __init__.py
+├── observability/
+│   ├── dashboards/
+│   └── __init__.py
+├── scheduler/
+│   ├── daily/
+│   ├── monthly/
+│   ├── crontab.yaml
+│   └── __init__.py
+├── schemas/
+│   └── sample/
+├── scripts/
+│   └── legacy/
+├── tests/
+│   ├── fixtures/
+│   ├── integration/
+│   ├── unit/
+│   └── __init__.py
+├── utils/
+│   └── __init__.py
+├── PROJECT_SUMMARY.md
+├── pyproject.toml
+├── sd.pu
+└── STRUCTURE.txt
+
+47 directories, 20 files
