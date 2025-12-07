@@ -231,7 +231,7 @@ async def main():
         "Incremental/DimDealer_MS/LatestData/",
         "Incremental/DimCustomerMaster/LatestData/",
         "Incremental/DimMaterial/LatestData/",
-        # "Historical_S_Historical/FactInvoiceSecondary/PreviousData/",
+        "Historical_S_Historical/FactInvoiceSecondary/PreviousData/",
         "Historical_S_Historical/FactInvoiceSecondary/LatestData/",
         "Historical_S_Historical/FactInvoiceSecondary_107_112/LatestData/",
         # "Historical_S_Historical/FactInvoiceSecondary_107_112/PreviousData/",

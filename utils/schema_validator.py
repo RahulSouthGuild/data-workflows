@@ -326,10 +326,14 @@ class SchemaValidator:
         column_mappings = {}
         schemas_dir = Path(schemas_dir)
 
-        # Get all .py files in schemas directory, sorted by name
-        schema_files = sorted(schemas_dir.glob("*.py"))
+        # Get all .py files in schemas directory and subdirectories, sorted by name
+        # Look in: root, tables/, views/, matviews/ directories
+        schema_files = sorted(schemas_dir.glob("*.py"))  # Root level files
+        schema_files.extend(sorted(schemas_dir.glob("tables/*.py")))  # tables/ subdirectory
+        schema_files.extend(sorted(schemas_dir.glob("views/*.py")))  # views/ subdirectory
+        schema_files.extend(sorted(schemas_dir.glob("matviews/*.py")))  # matviews/ subdirectory
 
-        print(f"{CYAN}Loading schemas from {schemas_dir}{RESET}")
+        print(f"{CYAN}Loading schemas from {schemas_dir} (including subdirectories){RESET}")
 
         for schema_file in schema_files:
             if schema_file.name.startswith("_"):

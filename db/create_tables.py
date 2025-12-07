@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from utils.DB_CONFIG import DB_CONFIG  # noqa: E402
-from db.schema import TABLES  # noqa: E402
+from db.schema import TABLES, SCHEMA_TABLES, SCHEMA_VIEWS, SCHEMA_MATVIEWS  # noqa: E402
 
 # Initialize colorama
 init(autoreset=True)
@@ -133,13 +133,15 @@ class StarRocksTableManager:
                 cursor.close()
 
     def create_table(self, table: Dict, skip_indexes: bool = False) -> bool:
-        """Create a single table or view"""
+        """Create a single table, view, or materialized view"""
         try:
             table_name = table["name"]
             table_type = table.get("type", "TABLE")
 
             if table_type == "VIEW":
                 return self._create_view(table)
+            elif table_type == "MATVIEW":
+                return self._create_matview(table)
             else:
                 return self._create_table(table, skip_indexes)
 
@@ -168,6 +170,31 @@ class StarRocksTableManager:
 
         self.print_success(f"Successfully created view {view_name}")
         logger.info(f"View {view_name} created successfully")
+        return True
+
+    def _create_matview(self, matview: Dict) -> bool:
+        """Create a materialized view"""
+        matview_name = matview["name"]
+        self.print_info(f"⚡ Creating materialized view {matview_name}...", Fore.MAGENTA)
+        logger.info(f"Creating materialized view: {matview_name}")
+
+        # Drop existing materialized view
+        if not self.execute_query(
+            f"DROP MATERIALIZED VIEW IF EXISTS {matview_name}",
+            f"drop materialized view {matview_name}",
+        ):
+            return False
+
+        # Create materialized view
+        schema = matview["schema"]
+        if not self.execute_query(schema, f"create materialized view {matview_name}"):
+            return False
+
+        # Handle comments
+        self._handle_comments(matview)
+
+        self.print_success(f"Successfully created materialized view {matview_name}")
+        logger.info(f"Materialized view {matview_name} created successfully")
         return True
 
     def _create_table(self, table: Dict, skip_indexes: bool = False) -> bool:
@@ -256,10 +283,12 @@ class StarRocksTableManager:
         return success_count, failed_count
 
     def drop_table(self, table_name: str, object_type: str = "TABLE") -> bool:
-        """Drop a single table or view"""
+        """Drop a single table, view, or materialized view"""
         try:
             if object_type == "VIEW":
                 query = f"DROP VIEW IF EXISTS {table_name}"
+            elif object_type == "MATVIEW":
+                query = f"DROP MATERIALIZED VIEW IF EXISTS {table_name}"
             else:
                 query = f"DROP TABLE IF EXISTS {table_name}"
 
@@ -346,20 +375,28 @@ def display_menu():
 
     while True:
         try:
-            print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
+            print(f"\n{Style.BRIGHT}{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
             print(f"{Style.BRIGHT}{Fore.CYAN}🔧 StarRocks Database Setup Menu{Style.RESET_ALL}")
-            print(f"{Style.BRIGHT}{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
+            print(f"{Style.BRIGHT}{Fore.CYAN}{'='*70}{Style.RESET_ALL}")
 
-            print(f"\n{Style.BRIGHT}{Fore.BLUE}Creation Operations:{Style.RESET_ALL}")
-            print(f"{Fore.WHITE}1. Create ALL Objects (Tables + Views){Style.RESET_ALL}")
+            print(f"\n{Style.BRIGHT}{Fore.BLUE}📊 CREATE Operations:{Style.RESET_ALL}")
+            print(f"{Fore.WHITE}1. Create ALL Objects (Tables + Views + MatViews){Style.RESET_ALL}")
+
+            print(f"\n{Style.BRIGHT}{Fore.BLUE}📋 Tables:{Style.RESET_ALL}")
             print(f"{Fore.WHITE}2. Create All Tables{Style.RESET_ALL}")
             print(f"{Fore.WHITE}3. Create Specific Table(s){Style.RESET_ALL}")
+
+            print(f"\n{Style.BRIGHT}{Fore.BLUE}👁️  Views:{Style.RESET_ALL}")
             print(f"{Fore.WHITE}4. Create All Views{Style.RESET_ALL}")
             print(f"{Fore.WHITE}5. Create Specific View(s){Style.RESET_ALL}")
 
-            print(f"\n{Style.BRIGHT}{Fore.RED}Deletion Operations:{Style.RESET_ALL}")
-            print(f"{Fore.RED}6. Drop All Objects{Style.RESET_ALL}")
-            print(f"{Fore.RED}7. Drop Specific Object{Style.RESET_ALL}")
+            print(f"\n{Style.BRIGHT}{Fore.BLUE}⚡ Materialized Views:{Style.RESET_ALL}")
+            print(f"{Fore.WHITE}6. Create All Materialized Views{Style.RESET_ALL}")
+            print(f"{Fore.WHITE}7. Create Specific Materialized View(s){Style.RESET_ALL}")
+
+            print(f"\n{Style.BRIGHT}{Fore.RED}🗑️  DELETE Operations:{Style.RESET_ALL}")
+            print(f"{Fore.RED}8. Drop All Objects{Style.RESET_ALL}")
+            print(f"{Fore.RED}9. Drop Specific Object{Style.RESET_ALL}")
 
             print(f"\n{Fore.WHITE}0. Exit{Style.RESET_ALL}")
 
@@ -380,14 +417,12 @@ def display_menu():
 
                 elif choice == "2":
                     # Create all tables
-                    tables = [t for t in TABLES if not t.get("type")]
-                    manager.create_multiple_tables(tables)
+                    manager.create_multiple_tables(SCHEMA_TABLES)
 
                 elif choice == "3":
                     # Create specific tables
-                    tables = [t for t in TABLES if not t.get("type")]
-                    if tables:
-                        selected = select_objects_interactive(tables, "table")
+                    if SCHEMA_TABLES:
+                        selected = select_objects_interactive(SCHEMA_TABLES, "table")
                         if selected:
                             manager.create_multiple_tables(selected)
                     else:
@@ -395,20 +430,37 @@ def display_menu():
 
                 elif choice == "4":
                     # Create all views
-                    views = [t for t in TABLES if t.get("type") == "VIEW"]
-                    manager.create_multiple_tables(views)
+                    if SCHEMA_VIEWS:
+                        manager.create_multiple_tables(SCHEMA_VIEWS)
+                    else:
+                        manager.print_error("No views defined")
 
                 elif choice == "5":
                     # Create specific views
-                    views = [t for t in TABLES if t.get("type") == "VIEW"]
-                    if views:
-                        selected = select_objects_interactive(views, "view")
+                    if SCHEMA_VIEWS:
+                        selected = select_objects_interactive(SCHEMA_VIEWS, "view")
                         if selected:
                             manager.create_multiple_tables(selected)
                     else:
                         manager.print_error("No views defined")
 
                 elif choice == "6":
+                    # Create all materialized views
+                    if SCHEMA_MATVIEWS:
+                        manager.create_multiple_tables(SCHEMA_MATVIEWS)
+                    else:
+                        manager.print_warning("No materialized views defined yet")
+
+                elif choice == "7":
+                    # Create specific materialized views
+                    if SCHEMA_MATVIEWS:
+                        selected = select_objects_interactive(SCHEMA_MATVIEWS, "materialized view")
+                        if selected:
+                            manager.create_multiple_tables(selected)
+                    else:
+                        manager.print_warning("No materialized views defined yet")
+
+                elif choice == "8":
                     # Drop all objects
                     confirm = input(
                         f"{Style.BRIGHT}{Fore.RED}⚠️  WARNING: This will drop ALL database objects. Type 'CONFIRM' to proceed: {Style.RESET_ALL}"
@@ -418,20 +470,24 @@ def display_menu():
                     else:
                         manager.print_warning("Operation cancelled")
 
-                elif choice == "7":
+                elif choice == "9":
                     # Drop specific object
                     print(f"\n{Style.BRIGHT}{Fore.MAGENTA}Select object type:{Style.RESET_ALL}")
                     print("1. Table")
                     print("2. View")
+                    print("3. Materialized View")
 
                     type_choice = input("\nEnter choice: ")
 
                     if type_choice == "1":
-                        objects = [t for t in TABLES if not t.get("type")]
+                        objects = SCHEMA_TABLES
                         obj_type = "TABLE"
                     elif type_choice == "2":
-                        objects = [t for t in TABLES if t.get("type") == "VIEW"]
+                        objects = SCHEMA_VIEWS
                         obj_type = "VIEW"
+                    elif type_choice == "3":
+                        objects = SCHEMA_MATVIEWS
+                        obj_type = "MATVIEW"
                     else:
                         manager.print_error("Invalid choice")
                         continue

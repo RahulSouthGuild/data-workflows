@@ -122,7 +122,7 @@ class SeedDataLoader:
         Map CSV column header to database column name using column_mappings
 
         Args:
-            csv_header: Column name from CSV file (usually lowercase, no underscores)
+            csv_header: Column name from CSV file (PascalCase or mixed case)
             table_name: Target table name to look up in mappings
 
         Returns:
@@ -135,11 +135,13 @@ class SeedDataLoader:
 
         table_mappings = self.column_mappings[table_name]
 
+        # Normalize CSV header to lowercase for matching (CSV can be PascalCase or mixed case)
+        normalized_header = csv_header.lower()
+
         # Try to find matching mapping
-        # CSV header is typically lowercase without underscores (e.g., "clustercode")
-        # We need to match it to the parquet_key in mappings
-        if csv_header in table_mappings:
-            db_col = table_mappings[csv_header].get("db_column", csv_header)
+        # Mappings use lowercase keys (e.g., "materialcode", "finalclassification")
+        if normalized_header in table_mappings:
+            db_col = table_mappings[normalized_header].get("db_column", csv_header)
             logger.debug(f"Mapped {csv_header} → {db_col}")
             return db_col
 

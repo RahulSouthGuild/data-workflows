@@ -153,7 +153,7 @@ def determine_chunk_size(file_size_mb):
     elif file_size_mb > 2000:  # 2-5GB
         return 1000000  # 1M records per chunk
     elif file_size_mb > 1000:  # 1-2GB
-        return 2000000  # 2M records per chunk
+        return 5000000  # 2M records per chunk
     elif file_size_mb > 500:  # 500MB-1GB
         return 3000000  # 3M records per chunk
     elif file_size_mb > 100:  # 100MB-500MB
