@@ -20,8 +20,9 @@ NC='\033[0m' # No Color
 
 # Configuration
 STARROCKS_DATA_DIR="/var/lib/starrocks"
-FE_CONTAINER="starrocks-fe-1"
-BE_CONTAINERS=("starrocks-be-1" "starrocks-be-2")
+FE_CONTAINER="prod_starrocks-fe-1"
+FE_CONTAINERS=("prod_starrocks-fe-1" "prod_starrocks-fe-2")
+BE_CONTAINERS=("prod_starrocks-be-1" "prod_starrocks-be-2")
 INIT_CONTAINER="starrocks-init"
 FE_PORT=9030
 FE_HTTP_PORT=8030
@@ -172,7 +173,7 @@ start_services() {
 
     # Start services
     print_info "Starting Docker Compose services..."
-    $DOCKER_COMPOSE up -d starrocks-fe-1 starrocks-be-1 starrocks-be-2 starrocks-init
+    $DOCKER_COMPOSE up -d prod_starrocks-fe-1 prod_starrocks-fe-2 prod_starrocks-be-1 prod_starrocks-be-2 starrocks-init
 
     print_info "Waiting for containers to initialize..."
     sleep 10
@@ -180,7 +181,7 @@ start_services() {
     # Check FE container status
     if ! docker ps | grep -q "$FE_CONTAINER"; then
         print_error "FE container is not running"
-        $DOCKER_COMPOSE logs starrocks-fe-1 | tail -20
+        $DOCKER_COMPOSE logs prod_starrocks-fe-1 | tail -20
         exit 1
     fi
 
@@ -198,7 +199,7 @@ start_services() {
     # Wait for FE health
     wait_for_health "http://localhost:$FE_HTTP_PORT/api/health" "StarRocks FE" || {
         print_error "FE health check failed. Showing logs:"
-        $DOCKER_COMPOSE logs --tail=50 starrocks-fe-1
+        $DOCKER_COMPOSE logs --tail=50 prod_starrocks-fe-1
         exit 1
     }
 
@@ -394,7 +395,7 @@ check_status() {
 
     # Container status
     print_info "Container Status:"
-    $DOCKER_COMPOSE ps starrocks-fe-1 starrocks-be-1 starrocks-be-2
+    $DOCKER_COMPOSE ps prod_starrocks-fe-1 prod_starrocks-fe-2 prod_starrocks-be-1 prod_starrocks-be-2
     echo ""
 
     # Health endpoints
@@ -481,7 +482,7 @@ main() {
             prepare_system
             ;;
         start)
-            # start_services
+            start_services
             ;;
         init-db)
             init_database_and_user
@@ -494,7 +495,7 @@ main() {
             ;;
         all)
             prepare_system
-            # start_services
+            start_services
             init_database_and_user
             register_backend
             check_status
