@@ -480,9 +480,9 @@ main() {
     case $command in
         prepare)
             prepare_system
-            ;;
-        start)
-            start_services
+        #     ;;
+        # start)
+        #     start_services
             ;;
         init-db)
             init_database_and_user
@@ -495,7 +495,7 @@ main() {
             ;;
         all)
             prepare_system
-            start_services
+            # start_services
             init_database_and_user
             register_backend
             check_status
