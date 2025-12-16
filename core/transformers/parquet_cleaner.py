@@ -118,8 +118,16 @@ def validate_parquet_schema(df: pl.DataFrame, table_name: str) -> bool:
             # Different integer sizes are ok (will be handled by type upgrade)
             is_compatible = True
         elif "DOUBLE" in parquet_base_type and (
-            "DOUBLE" in expected_base_type or "FLOAT" in expected_base_type
+            "DOUBLE" in expected_base_type
+            or "FLOAT" in expected_base_type
+            or "DECIMAL" in expected_base_type
         ):
+            # Float64/Double can store decimal values, treat as compatible with DECIMAL
+            is_compatible = True
+        elif "FLOAT" in parquet_base_type and (
+            "FLOAT" in expected_base_type or "DECIMAL" in expected_base_type
+        ):
+            # Float32 can store decimal values, treat as compatible with DECIMAL
             is_compatible = True
 
         if not is_compatible:

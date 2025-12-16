@@ -19,20 +19,20 @@ to maintain clear separation between DDL and DML operations.
 """
 
 SEED_CONFIG = {
-    "DimMaterialMapping": {
+    "dim_material_mapping": {
         "csv_file": "DimMaterialMapping-MASTER-16-04-2025.csv",
         "enabled": True,
         "description": "Material classification mapping - maps materials to divisions and verticals",
         "truncate_before_load": True,
     },
-    "DimSalesGroup": {
+    "dim_sales_group": {
         "csv_file": "DimSalesGroup.csv",
         "enabled": True,
         "description": "Sales groups with divisions and verticals - reference data for sales reporting",
         "truncate_before_load": True,
     },
     # Template for adding new seed tables:
-    # "TableName": {
+    # "table_name_snake_case": {
     #     "csv_file": "TableName.csv",
     #     "enabled": False,  # Set to True to enable loading
     #     "description": "Description of what this table contains",
