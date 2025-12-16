@@ -237,6 +237,7 @@ async def main():
         # "Historical_S_Historical/FactInvoiceSecondary_107_112/PreviousData/",
         "Historical_S_Historical/FactInvoiceDetails_107_112/LatestData/",
         "Historical_S_Historical/FactInvoiceDetails/LatestData/",
+        "Historical_S_Historical/FactInvoiceDetails/PreviousData/",
         # "Historical_S_Historical/FactInvoiceDetails_107_112/PreviousData/",
     ]
 
