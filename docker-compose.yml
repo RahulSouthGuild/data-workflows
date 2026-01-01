@@ -13,6 +13,7 @@ services:
       - "9010:9010"
     volumes:
       - fe1_meta:/opt/starrocks/fe/meta
+      - fe1_logs:/opt/starrocks/fe/log
       - ./fe.conf:/opt/starrocks/fe/conf/fe.conf
     environment:
       - JAVA_OPTS=-Xmx4g -Xms4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
@@ -42,6 +43,7 @@ services:
       - "9011:9010"
     volumes:
       - fe2_meta:/opt/starrocks/fe/meta
+      - fe2_logs:/opt/starrocks/fe/log
       - ./fe.conf:/opt/starrocks/fe/conf/fe.conf
     environment:
       - JAVA_OPTS=-Xmx4g -Xms4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
@@ -71,6 +73,7 @@ services:
       - "9050:9050"
     volumes:
       - be1_storage:/opt/starrocks/be/storage
+      - be1_logs:/opt/starrocks/be/log
       - ./be-1.conf:/opt/starrocks/be/conf/be.conf
     environment:
       - BE_MEM_LIMIT=80%
@@ -101,6 +104,7 @@ services:
       - "9051:9050"
     volumes:
       - be2_storage:/opt/starrocks/be/storage
+      - be2_logs:/opt/starrocks/be/log
       - ./be-2.conf:/opt/starrocks/be/conf/be.conf
     environment:
       - BE_MEM_LIMIT=80%
@@ -151,9 +155,17 @@ networks:
 volumes:
   fe1_meta:
     driver: local
+  fe1_logs:
+    driver: local
   fe2_meta:
+    driver: local
+  fe2_logs:
     driver: local
   be1_storage:
     driver: local
+  be1_logs:
+    driver: local
   be2_storage:
+    driver: local
+  be2_logs:
     driver: local
