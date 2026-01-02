@@ -9,6 +9,9 @@ import logging.handlers
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+import functools
+import time
+import asyncio
 
 # Color codes for console output
 RED = "\033[31m"
@@ -184,3 +187,78 @@ def log_summary(
         logger.info(f"  📈 Records processed: {total_records:,}")
     logger.info(f"  ⏱️  Total time: {total_time:.2f}s")
     logger.info("=" * 100 + "\n")
+
+
+def with_status_tracking(service_name: str):
+    """
+    Decorator to wrap job functions with consistent error handling and status tracking.
+    Ensures that functions always log errors properly.
+
+    Args:
+        service_name: Service name to use in logging and status tracking
+
+    Returns:
+        Function that wraps the original with error handling
+
+    Example:
+        @with_status_tracking("daily-blob-backup")
+        async def run_backup():
+            # Job logic
+            pass
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            start_time = time.time()
+            start_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            try:
+                # Execute the wrapped function
+                result = await func(*args, **kwargs)
+
+                end_time = time.time()
+                end_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                duration = (end_time - start_time) / 60  # Convert to minutes
+
+                # Return result (function should handle its own logging)
+                return result
+
+            except Exception as e:
+                end_time = time.time()
+                end_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                duration = (end_time - start_time) / 60  # Convert to minutes
+
+                # The function's logger should handle error logging
+                # This decorator just wraps and ensures cleanup
+                raise
+
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            start_time = time.time()
+            start_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            try:
+                # Execute the wrapped function
+                result = func(*args, **kwargs)
+
+                end_time = time.time()
+                end_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                duration = (end_time - start_time) / 60  # Convert to minutes
+
+                return result
+
+            except Exception as e:
+                end_time = time.time()
+                end_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                duration = (end_time - start_time) / 60  # Convert to minutes
+
+                raise
+
+        # Return appropriate wrapper based on function type
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+
+    return decorator

@@ -80,8 +80,9 @@
             "db_column": "credit_value"
         },
         "customercode": {
-            "data_type": "INTEGER",
-            "db_column": "customer_code"
+            "data_type": "VARCHAR(12)",
+            "db_column": "customer_code",
+            "max_string_length": 12
         },
         "customercodeorg": {
             "data_type": "INTEGER",

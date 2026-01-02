@@ -29,6 +29,9 @@ from utils.pipeline_config import (  # noqa: E402
     Config,
 )
 from utils.dim_transform_utils import apply_type_conversions  # noqa: E402
+from core.transformers.transformation_engine import (  # noqa: E402
+    validate_and_transform_dataframe,
+)
 
 logger = get_pipeline_logger(__name__)
 
@@ -145,17 +148,19 @@ class ETLOrchestrator:
         self, df: pl.DataFrame, table_name: str, schema: Dict
     ) -> Tuple[Optional[pl.DataFrame], Dict[str, str]]:
         """
-        TRANSFORM: Apply schema mappings and column renames.
+        TRANSFORM: Apply schema mappings and column renames using centralized engine.
 
-        This step:
-        - Builds column mapping between parquet and database columns
-        - Renames parquet columns to match database schema
-        - Handles underscore/case conversion mismatches
+        Uses the unified transformation engine from core.transformers.transformation_engine
+        which handles:
+        - Column mapping from JSON files
+        - Schema validation
+        - Data type overflow detection
+        - VARCHAR overflow auto-fix
 
         Args:
             df: Input DataFrame
             table_name: Database table name
-            schema: Schema dictionary for the table
+            schema: Schema dictionary (not used, kept for compatibility)
 
         Returns:
             Tuple of (transformed_df, column_mapping_dict) or (None, {}) if error
@@ -163,38 +168,23 @@ class ETLOrchestrator:
         try:
             logger.info(f"{CYAN}[TRANSFORM] Mapping columns for {table_name}...{RESET}")
 
-            # Extract column definitions from schema
-            schema_columns = extract_columns_from_schema(schema, table_name)
-            if not schema_columns:
-                logger.error(f"{RED}[TRANSFORM] No schema columns found{RESET}")
-                return None, {}
+            # Use centralized transformation engine
+            transformed_df, metadata = validate_and_transform_dataframe(df, table_name, logger)
 
-            # Build column mapping
-            column_mapping_header, mapping = build_column_mapping_header(
-                df.columns, schema_columns, df
-            )
-
-            if not mapping:
-                logger.error(f"{RED}[TRANSFORM] No columns could be mapped{RESET}")
-                return None, {}
-
-            # Filter to only mapped columns and rename
-            mapped_cols = list(mapping.keys())
-            df = df.select(mapped_cols)
-
-            # Rename columns
-            rename_dict = mapping
-            df = df.rename(rename_dict)
+            # Extract column mapping from metadata for compatibility
+            mapping = {col: col for col in transformed_df.columns}
 
             logger.info(
-                f"{GREEN}✓ Mapped {len(mapping)} columns, "
-                f"DataFrame: {len(df):,} rows × {len(df.columns)} columns{RESET}"
+                f"{GREEN}✓ Transform complete: {len(transformed_df):,} rows × {len(transformed_df.columns)} columns{RESET}"
             )
 
-            return df, mapping
+            return transformed_df, mapping
 
         except Exception as e:
             logger.error(f"{RED}[TRANSFORM] Error in transformation: {e}{RESET}")
+            import traceback
+
+            logger.error(traceback.format_exc())
             return None, {}
 
     def clean(self, df: pl.DataFrame, table_name: str) -> Optional[pl.DataFrame]:

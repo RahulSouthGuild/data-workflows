@@ -18,42 +18,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.schema_validator import SchemaValidator  # noqa: E402
 
-# Initialize schema validator with schema files from db/schemas and column mappings
-SCHEMAS_DIR = Path(__file__).parent.parent.parent / "db" / "schemas"
-COLUMN_MAPPINGS_DIR = Path(__file__).parent.parent.parent / "db" / "column_mappings"
-validator = SchemaValidator.from_schema_files(SCHEMAS_DIR, COLUMN_MAPPINGS_DIR)
-
-
-def get_table_name_from_file(file_stem: str) -> str:
-    """Map parquet filename to database table name."""
-    # Comprehensive mapping for all PascalCase filenames to snake_case table names
-    filename_to_table = {
-        "DimCustomerMaster": "dim_customer_master",
-        "DimDealerMaster": "dim_dealer_master",
-        "DimHierarchy": "dim_hierarchy",
-        "DimMaterial": "dim_material",
-        "DimMaterialMapping": "dim_material_mapping",
-        "DimSalesGroup": "dim_sales_group",
-        "FactInvoiceDetails": "fact_invoice_details",
-        "FactInvoiceSecondary": "fact_invoice_secondary",
-        "RlsMaster": "rls_master",
-    }
-
-    # Check for exact match first
-    if file_stem in filename_to_table:
-        return filename_to_table[file_stem]
-
-    # Check for partial matches (for files with suffixes like FactInvoiceSecondary_901)
-    for key, value in filename_to_table.items():
-        if file_stem.startswith(key):
-            return value
-
-    # Fallback: convert PascalCase to snake_case
-    import re
-
-    snake_case = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", file_stem)
-    snake_case = re.sub("([a-z0-9])([A-Z])", r"\1_\2", snake_case)
-    return snake_case.lower()
+# Import centralized transformation engine
+from core.transformers.transformation_engine import (  # noqa: E402
+    validate_and_transform_dataframe as centralized_validate_and_transform,
+    get_table_name_from_file,
+)
 
 
 def validate_parquet_schema(df: pl.DataFrame, table_name: str) -> bool:
@@ -384,13 +353,10 @@ def configure_polars_for_low_memory():
 
 async def validate_and_transform_dataframe(df: pl.DataFrame, table_name: str) -> pl.DataFrame:
     """
-    Transform and validate dataframe using column mappings.
+    Async wrapper around centralized transformation engine.
 
-    Steps:
-    1. Load column mappings from JSON file
-    2. Validate that mapped db_columns exist in the database schema
-    3. Rename parquet columns to database column names
-    4. Validate against database schema
+    Uses the unified transformation logic from core.transformers.transformation_engine
+    which ensures consistent data quality across all pipelines.
 
     Args:
         df: Polars DataFrame from parquet file (with parquet column names)
@@ -402,178 +368,9 @@ async def validate_and_transform_dataframe(df: pl.DataFrame, table_name: str) ->
     Raises:
         ValueError: If validation fails critically
     """
-    import json
+    # Call centralized transformation engine (synchronous)
+    transformed_df, metadata = centralized_validate_and_transform(df, table_name, None)
 
-    print(f"{Fore.CYAN}Transforming columns for table: {table_name}{Style.RESET_ALL}")
-
-    # Step 1: Map table names to their JSON mapping files
-    mapping_files = {
-        "dim_customer_master": "02_DimCustomerMaster.json",
-        "dim_dealer_master": "03_DimDealerMaster.json",
-        "dim_hierarchy": "04_DimHierarchy.json",
-        "dim_material": "06_DimMaterial.json",
-        "dim_material_mapping": "01_DimMaterialMapping.json",
-        "dim_sales_group": "05_DimSalesGroup.json",
-        "fact_invoice_details": "07_FactInvoiceDetails.json",
-        "fact_invoice_secondary": "08_FactInvoiceSecondary.json",
-        "rls_master": "09_RlsMaster.json",
-    }
-
-    # Step 1.5: Get schema column names from validator
-    schema_columns = validator.get_schema_columns(table_name)
-    if not schema_columns:
-        print(f"{Fore.YELLOW}⚠️  Could not extract schema columns for {table_name}{Style.RESET_ALL}")
-        schema_columns = set()
-
-    # Step 2: Load and apply column mappings
-    json_filename = mapping_files.get(table_name)
-    if json_filename:
-        mapping_file = COLUMN_MAPPINGS_DIR / json_filename
-        try:
-            with open(mapping_file) as f:
-                mapping_data = json.load(f)
-
-            # Step 3: Build rename dictionary and validate db_columns exist in schema
-            rename_dict = {}
-            invalid_mappings = []
-
-            for parquet_col, col_info in mapping_data["columns"].items():
-                db_col = col_info["db_column"]
-
-                # VALIDATION: Check if db_column exists in schema
-                if schema_columns and db_col.lower() not in schema_columns:
-                    invalid_mappings.append(
-                        {
-                            "parquet_column": parquet_col,
-                            "db_column": db_col,
-                            "reason": "Column does not exist in database schema",
-                        }
-                    )
-
-                if parquet_col != db_col:
-                    rename_dict[parquet_col] = db_col
-
-            # Step 3.5: Report invalid mappings with warnings/errors
-            if invalid_mappings:
-                print(
-                    f"{Fore.RED}❌ VALIDATION ERRORS: Invalid column mappings found{Style.RESET_ALL}"
-                )
-                for invalid in invalid_mappings[:10]:  # Show first 10
-                    print(
-                        f"  {Fore.RED}✗ {invalid['parquet_column']:40} → {invalid['db_column']:40} ({invalid['reason']}){Style.RESET_ALL}"
-                    )
-                if len(invalid_mappings) > 10:
-                    print(
-                        f"  {Fore.RED}... and {len(invalid_mappings) - 10} more invalid mappings{Style.RESET_ALL}"
-                    )
-
-                # Log all invalid mappings to file
-                log_file = (
-                    Path(__file__).parent.parent.parent
-                    / "logs"
-                    / f"invalid_mappings_{table_name}.log"
-                )
-                with open(log_file, "w") as f:
-                    f.write(f"Invalid Column Mappings for {table_name}\n")
-                    f.write(f"Generated: {datetime.now().isoformat()}\n")
-                    f.write(f"Total Invalid Mappings: {len(invalid_mappings)}\n\n")
-                    f.write("Parquet Column → DB Column (Reason)\n")
-                    f.write("-" * 100 + "\n")
-                    for invalid in invalid_mappings:
-                        f.write(
-                            f"{invalid['parquet_column']:40} → {invalid['db_column']:40} ({invalid['reason']})\n"
-                        )
-
-                print(
-                    f"{Fore.YELLOW}⚠️  Logged {len(invalid_mappings)} invalid mappings to {log_file}{Style.RESET_ALL}"
-                )
-
-            # Step 4: Apply column renaming
-            if rename_dict:
-                print(
-                    f"{Fore.CYAN}Renaming {len(rename_dict)} columns using column mappings{Style.RESET_ALL}"
-                )
-                # Show first 5 mappings
-                for orig, mapped in sorted(list(rename_dict.items())[:5]):
-                    print(f"  {Fore.YELLOW}{orig:40} → {mapped}{Style.RESET_ALL}")
-                if len(rename_dict) > 5:
-                    print(f"  {Fore.YELLOW}... and {len(rename_dict) - 5} more{Style.RESET_ALL}")
-                df = df.rename(rename_dict)
-                print(f"{Fore.GREEN}✓ Column transformation complete{Style.RESET_ALL}")
-        except FileNotFoundError:
-            print(f"{Fore.YELLOW}⚠️  No mapping file found for {table_name}{Style.RESET_ALL}")
-        except Exception as e:
-            print(
-                f"{Fore.YELLOW}⚠️  Could not apply mappings for {table_name}: {e}{Style.RESET_ALL}"
-            )
-    else:
-        print(f"{Fore.YELLOW}⚠️  No mapping file configured for {table_name}{Style.RESET_ALL}")
-
-    # Step 4.5: DETECT OVERFLOWS AND TYPE MISMATCHES (NEW)
-    print(f"{Fore.CYAN}Checking for data type overflows and mismatches...{Style.RESET_ALL}")
-    overflows = validator.detect_data_overflows(df, table_name)
-
-    has_errors = False
-    error_details = []
-
-    # Check for type mismatches (STRICT - throw error)
-    if overflows.get("type_mismatches"):
-        has_errors = True
-        print(f"{Fore.RED}❌ DATA TYPE MISMATCH ERRORS:{Style.RESET_ALL}")
-        for mismatch in overflows["type_mismatches"]:
-            error_msg = f"Column '{mismatch['column']}': Expected {mismatch['schema_type']}, got {mismatch['data_type']}"
-            print(f"  {Fore.RED}✗ {error_msg}{Style.RESET_ALL}")
-            error_details.append(error_msg)
-
-    # Check for numeric overflow (STRICT - throw error)
-    if overflows.get("numeric_overflows"):
-        has_errors = True
-        print(f"{Fore.RED}❌ NUMERIC VALUE OVERFLOW ERRORS:{Style.RESET_ALL}")
-        for overflow in overflows["numeric_overflows"]:
-            error_msg = f"Column '{overflow['column']}' ({overflow['schema_type']}): Data range [{overflow['min']}, {overflow['max']}] exceeds type range {overflow['range']}"
-            print(f"  {Fore.RED}✗ {error_msg}{Style.RESET_ALL}")
-            error_details.append(error_msg)
-
-    # Throw error if type mismatches or numeric overflows detected
-    if has_errors:
-        error_msg = f"Data validation failed for {table_name}:\n" + "\n".join(error_details)
-        print(f"{Fore.RED}{error_msg}{Style.RESET_ALL}")
-        raise ValueError(error_msg)
-
-    # Check for VARCHAR overflow (AUTO-FIX with ALTER)
-    if overflows.get("varchar_overflows"):
-        print(
-            f"{Fore.YELLOW}⚠️  VARCHAR OVERFLOW DETECTED - Auto-fixing with ALTER TABLE{Style.RESET_ALL}"
-        )
-        for overflow in overflows["varchar_overflows"]:
-            col_name = overflow["column"]
-            old_size = overflow["schema_size"]
-            new_size = overflow["recommended_size"]
-            print(
-                f"  {Fore.YELLOW}Column '{col_name}': VARCHAR({old_size}) → VARCHAR({new_size}){Style.RESET_ALL}"
-            )
-
-            # Log overflow
-            overflow_log = (
-                Path(__file__).parent.parent.parent / "logs" / f"varchar_overflows_{table_name}.log"
-            )
-            with open(overflow_log, "a") as f:
-                f.write(
-                    f"{datetime.now().isoformat()}: {col_name} VARCHAR({old_size}) → VARCHAR({new_size})\n"
-                )
-
-    # Step 5: Validate against schema
-    print(f"{Fore.CYAN}Validating data against table schema: {table_name}{Style.RESET_ALL}")
-    is_valid, error_msg, transformed_df = validator.validate_dataframe_against_schema(
-        df, table_name
-    )
-
-    if not is_valid:
-        error_msg = f"{Fore.RED}Validation Error for {table_name}: {error_msg}{Style.RESET_ALL}"
-        print(error_msg)
-        raise ValueError(error_msg)
-
-    print(f"{Fore.GREEN}✓ Validation passed for {table_name}{Style.RESET_ALL}")
     return transformed_df
 
 

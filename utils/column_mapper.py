@@ -253,7 +253,7 @@ def build_column_mapping_header(
 
     Args:
         parquet_columns: List of column names in parquet file
-        schema_columns: Dict of {db_col_name: col_type} from schema
+        schema_columns: Dict of {parquet_col: db_col} mapping (from extract_columns_from_schema)
         parquet_df: Optional parquet DataFrame for type inference
 
     Returns:
@@ -266,18 +266,12 @@ def build_column_mapping_header(
     unmapped = []
 
     for parquet_col in parquet_columns:
-        # Get parquet data type if DataFrame provided
-        parquet_type = None
-        if parquet_df is not None and parquet_col in parquet_df.columns:
-            parquet_type = str(parquet_df[parquet_col].dtype)
-
-        # Find matching schema column
-        db_col, db_type = find_column_mapping(parquet_col, schema_columns, parquet_type)
-
-        if db_col:
+        # Direct lookup: schema_columns has {parquet_col: db_col} mapping
+        if parquet_col in schema_columns:
+            db_col = schema_columns[parquet_col]
             mapping[parquet_col] = db_col
             mapped_columns.append(db_col)
-            logger.info(f"{GREEN}✓ Mapped {parquet_col} → {db_col} ({db_type}){RESET}")
+            logger.info(f"{GREEN}✓ Mapped {parquet_col} → {db_col}{RESET}")
         else:
             unmapped.append(parquet_col)
             logger.warning(f"{YELLOW}⚠ Could not map column: {parquet_col}{RESET}")
@@ -347,38 +341,82 @@ def rename_dataframe_columns(df: pl.DataFrame, mapping: Dict[str, str]) -> pl.Da
 
 def extract_columns_from_schema(schema: Dict, table_name: Optional[str] = None) -> Dict[str, str]:
     """
-    Extract column names and types from schema dictionary.
+    Extract parquet→database column mapping from schema (mapping file).
 
-    Handles both formats:
-    - {table_name: {columns: {col_name: col_type}}}
-    - {columns: {col_name: col_type}}
+    The schema dict can have two formats:
+
+    Format 1 (nested):
+    {
+        "dim_material": {
+            "table_name": "dim_material",
+            "columns": {
+                "parquetColumnName": {
+                    "db_column": "database_column_name",
+                    "data_type": "TYPE",
+                    ...
+                },
+                ...
+            }
+        }
+    }
+
+    Format 2 (flat):
+    {
+        "table_name": "dim_material",
+        "columns": {
+            "parquetColumnName": {
+                "db_column": "database_column_name",
+                ...
+            }
+        }
+    }
+
+    This function extracts and returns: {parquetColumnName: database_column_name}
 
     Args:
-        schema: Schema dictionary
+        schema: Schema dictionary from mapping file
         table_name: Optional table name for nested schema format
 
     Returns:
-        Dict of {column_name: column_type}
+        Dict of {parquet_column_name: database_column_name} mapping
     """
-    # Try nested format first
-    if table_name and table_name in schema:
-        schema_entry = schema[table_name]
-        if isinstance(schema_entry, dict):
-            if "columns" in schema_entry:
-                return schema_entry["columns"]
-            # Try assuming it's the columns dict directly
-            return schema_entry
+    mapping = {}
+    columns_dict = None
 
-    # Try flat format
-    if "columns" in schema:
-        return schema["columns"]
+    # Try nested format first (schema has top-level table_name key)
+    if schema and len(schema) == 1:
+        # If schema is {table_name: {...table_info...}}
+        table_key = list(schema.keys())[0]
+        table_data = schema[table_key]
+        if isinstance(table_data, dict) and "columns" in table_data:
+            columns_dict = table_data["columns"]
 
-    # Return schema as-is if it looks like columns dict
-    if all(isinstance(v, str) for v in schema.values()):
-        return schema
+    # Try flat format (schema directly has "columns" key)
+    if not columns_dict and "columns" in schema:
+        columns_dict = schema["columns"]
 
-    logger.error(f"{RED}Could not extract columns from schema{RESET}")
-    return {}
+    if not columns_dict:
+        logger.error(f"{RED}Could not find 'columns' in schema{RESET}")
+        return {}
+
+    # Extract parquet_col → db_col mapping from each column definition
+    for parquet_col, col_def in columns_dict.items():
+        if isinstance(col_def, dict) and "db_column" in col_def:
+            db_col = col_def["db_column"]
+            mapping[parquet_col] = db_col
+        else:
+            # Fallback: if col_def is just a string (data type), assume parquet_col == db_col
+            mapping[parquet_col] = parquet_col
+            logger.warning(
+                f"{YELLOW}No db_column found for {parquet_col}, assuming identity mapping{RESET}"
+            )
+
+    if not mapping:
+        logger.error(f"{RED}Could not extract any column mappings from schema{RESET}")
+        return {}
+
+    logger.info(f"{GREEN}✓ Extracted {len(mapping)} column mappings from schema{RESET}")
+    return mapping
 
 
 def debug_column_mapping(

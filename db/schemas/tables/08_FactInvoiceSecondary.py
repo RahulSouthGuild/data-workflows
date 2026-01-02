@@ -9,7 +9,7 @@ TABLE = {
     "schema": """CREATE TABLE fact_invoice_secondary (
                 active_flag SMALLINT,
                 invoice_date INTEGER,
-                customer_code INTEGER,
+                customer_code VARCHAR(12),
                 cash_discount DOUBLE,
                 cgst_amount DOUBLE,
                 cgst_percentage DOUBLE,
@@ -41,6 +41,7 @@ TABLE = {
                 invoice_date_df VARCHAR(150),
                 invoice_no VARCHAR(150),
                 invoice_print_number VARCHAR(160),
+                fis_sg_id_cc_in VARCHAR(40),
                 item_code VARCHAR(200),
                 item_determination_code VARCHAR(120),
                 item_weight DOUBLE,
@@ -81,7 +82,9 @@ TABLE = {
             );""",
     "comments": {
         "table": "Stores secondary invoice transaction data.",
-        "columns": {},
+        "columns": {
+            "fis_sg_id_cc_in": "Generated as concatenation of invoice_date, customer_code and invoice_no"
+        },
     },
     "indexes": {},
 }
