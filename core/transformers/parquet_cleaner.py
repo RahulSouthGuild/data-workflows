@@ -493,6 +493,10 @@ async def main():
         print(f"{Fore.CYAN}Creating necessary directories{Style.RESET_ALL}")
         os.makedirs(clean_dir, exist_ok=True)
 
+        # Initialize the schema validator from schema files
+        schemas_dir = PROJECT_ROOT / "db" / "schemas"
+        column_mappings_dir = PROJECT_ROOT / "db" / "column_mappings"
+        validator = SchemaValidator.from_schema_files(schemas_dir, column_mappings_dir)
         print(
             f"{Fore.CYAN}Schema validator initialized with {len(validator.tables)} tables from tables.py{Style.RESET_ALL}"
         )

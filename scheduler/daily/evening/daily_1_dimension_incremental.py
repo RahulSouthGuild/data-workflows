@@ -156,10 +156,11 @@ async def run_pipeline(logger) -> dict:
         # Connect to Azure Blob Storage
         logger.info("🔗 Connecting to Azure Blob Storage...")
 
-        async with BlobServiceClient.from_connection_string(
-            Config.AZURE_STORAGE_CONNECTION_STRING
-        ) as client:
-            container_client = client.get_container_client(Config.AZURE_CONTAINER_NAME)
+        azure_config = Config.get_azure_config()
+        connection_string = f"BlobEndpoint={azure_config['account_url']};SharedAccessSignature={azure_config['sas_token']}"
+
+        async with BlobServiceClient.from_connection_string(connection_string) as client:
+            container_client = client.get_container_client(azure_config["container_name"])
 
             # List all blobs to process
             logger.info("🔍 Scanning Azure blobs...")

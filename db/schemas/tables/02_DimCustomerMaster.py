@@ -8,7 +8,7 @@ TABLE = {
     "name": "dim_customer_master",
     "indexes": {},
     "schema": """CREATE TABLE dim_customer_master (
-                    customer_code INTEGER,
+                    customer_code VARCHAR(12),
                     customer_name VARCHAR(150),
                     sales_organization_code SMALLINT,
                     distribution_channel_code SMALLINT,
@@ -60,7 +60,7 @@ TABLE = {
                     payment_method VARCHAR(101),
                     payment_method_name VARCHAR(116),
                     rec_con_account INTEGER,
-                    accounting_clerk SMALLINT,
+                    accounting_clerk VARCHAR(12),
                     cst_number VARCHAR(137),
                     lst_number VARCHAR(137),
                     pan_number VARCHAR(125),

@@ -16,7 +16,7 @@ TABLE = {
                     count_mtd SMALLINT,
                     created_by_type VARCHAR(112),
                     creation_date INTEGER,
-                    customer_code INTEGER,
+                    customer_code VARCHAR(12),
                     dealer_address_1 VARCHAR(130),
                     dealer_address_2 VARCHAR(130),
                     dealer_address_3 VARCHAR(130),
