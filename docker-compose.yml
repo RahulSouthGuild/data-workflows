@@ -1,171 +1,352 @@
-version: '3.8'
-
 services:
-  starrocks-fe-1:
+  starrocks-fe1:
     image: starrocks/fe-ubuntu:3.3-latest
+    hostname: starrocks-fe1
     container_name: starrocks-fe-1
-    hostname: starrocks-fe-1
-    command: /opt/starrocks/fe/bin/start_fe.sh
+    user: root
+    
+    entrypoint: /bin/bash
+    command:
+      - /config/start-fe.sh
+      - fe1
+    
+    environment:
+      - JAVA_OPTS=-Xms4096m -Xmx4096m
+    
     ports:
       - "8030:8030"
-      - "9020:9020"
-      - "9030:9030"
       - "9010:9010"
-    volumes:
-      - fe1_meta:/opt/starrocks/fe/meta
-      - fe1_logs:/opt/starrocks/fe/log
-      - ./fe.conf:/opt/starrocks/fe/conf/fe.conf
-    environment:
-      - JAVA_OPTS=-Xmx4g -Xms4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+      - "9030:9030"
+    
     networks:
-      starrocks_net:
-        ipv4_address: 172.18.0.10
-    restart: unless-stopped
+      starrocks_network:
+        ipv4_address: 172.25.0.10
+    
+    volumes:
+      - starrocks-fe1-meta:/opt/starrocks/fe/meta
+      - starrocks-fe1-log:/opt/starrocks/fe/log
+      - ./config:/config:ro
+    
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8030/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:8030/api/bootstrap"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 120s
+      start_period: 30s
+    
+    restart: unless-stopped
 
-  starrocks-fe-2:
+  starrocks-fe2:
     image: starrocks/fe-ubuntu:3.3-latest
+    hostname: starrocks-fe2
     container_name: starrocks-fe-2
-    hostname: starrocks-fe-2
-    command: /opt/starrocks/fe/bin/start_fe.sh --helper starrocks-fe-1:9010
-    depends_on:
-      starrocks-fe-1:
-        condition: service_healthy
+    user: root
+    
+    entrypoint: /bin/bash
+    command:
+      - /config/start-fe.sh
+      - fe2
+    
+    environment:
+      - JAVA_OPTS=-Xms4096m -Xmx4096m
+    
     ports:
       - "8031:8030"
-      - "9021:9020"
-      - "9031:9030"
       - "9011:9010"
-    volumes:
-      - fe2_meta:/opt/starrocks/fe/meta
-      - fe2_logs:/opt/starrocks/fe/log
-      - ./fe.conf:/opt/starrocks/fe/conf/fe.conf
-    environment:
-      - JAVA_OPTS=-Xmx4g -Xms4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+      - "9031:9030"
+    
     networks:
-      starrocks_net:
-        ipv4_address: 172.18.0.11
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8030/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 150s
-
-  starrocks-be-1:
-    image: starrocks/be-ubuntu:3.3-latest
-    container_name: starrocks-be-1
-    hostname: starrocks-be-1
-    command: /opt/starrocks/be/bin/start_be.sh
+      starrocks_network:
+        ipv4_address: 172.25.0.11
+    
+    volumes:
+      - starrocks-fe2-meta:/opt/starrocks/fe/meta
+      - starrocks-fe2-log:/opt/starrocks/fe/log
+      - ./config:/config:ro
+    
     depends_on:
-      starrocks-fe-1:
+      starrocks-fe1:
         condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8030/api/bootstrap"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    restart: unless-stopped
+
+  starrocks-be1:
+    image: starrocks/be-ubuntu:3.3-latest
+    hostname: starrocks-be1
+    container_name: starrocks-be-1
+    user: root
+    
+    entrypoint: /bin/bash
+    command:
+      - /config/start-be.sh
+      - starrocks-be1
+      - "35"
+      - starrocks-fe1
+      - "9030"
+      - be1
+    
+    environment:
+      - JAVA_OPTS=-Xms2048m -Xmx2048m
+    
     ports:
       - "8040:8040"
-      - "9060:9060"
-      - "8060:8060"
       - "9050:9050"
-    volumes:
-      - be1_storage:/opt/starrocks/be/storage
-      - be1_logs:/opt/starrocks/be/log
-      - ./be-1.conf:/opt/starrocks/be/conf/be.conf
-    environment:
-      - BE_MEM_LIMIT=80%
-      - STORAGE_ROOT_PATH=/opt/starrocks/be/storage,medium:ssd
+      - "9060:9060"
+    
     networks:
-      starrocks_net:
-        ipv4_address: 172.18.0.20
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8040/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-
-  starrocks-be-2:
-    image: starrocks/be-ubuntu:3.3-latest
-    container_name: starrocks-be-2
-    hostname: starrocks-be-2
-    command: /opt/starrocks/be/bin/start_be.sh
+      starrocks_network:
+        ipv4_address: 172.25.0.20
+    
+    volumes:
+      - starrocks-be1-storage:/opt/starrocks/be/storage
+      - starrocks-be1-log:/opt/starrocks/be/log
+      - ./config:/config:ro
+    
     depends_on:
-      starrocks-fe-1:
+      starrocks-fe1:
         condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    
+    restart: unless-stopped
+
+  starrocks-be2:
+    image: starrocks/be-ubuntu:3.3-latest
+    hostname: starrocks-be2
+    container_name: starrocks-be-2
+    user: root
+    
+    entrypoint: /bin/bash
+    command:
+      - /config/start-be.sh
+      - starrocks-be2
+      - "40"
+      - starrocks-fe1
+      - "9030"
+      - be2
+    
+    environment:
+      - JAVA_OPTS=-Xms2048m -Xmx2048m
+    
     ports:
       - "8041:8040"
-      - "9061:9060"
-      - "8061:8060"
       - "9051:9050"
+      - "9061:9060"
+    
+    networks:
+      starrocks_network:
+        ipv4_address: 172.25.0.21
+    
     volumes:
-      - be2_storage:/opt/starrocks/be/storage
-      - be2_logs:/opt/starrocks/be/log
-      - ./be-2.conf:/opt/starrocks/be/conf/be.conf
-    environment:
-      - BE_MEM_LIMIT=80%
-      - STORAGE_ROOT_PATH=/opt/starrocks/be/storage,medium:ssd
-    networks:
-      starrocks_net:
-        ipv4_address: 172.18.0.21
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8040/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-
-  # Initialization service - registers backends automatically
-  starrocks-init:
-    image: starrocks/fe-ubuntu:3.3-latest
-    container_name: starrocks-init
+      - starrocks-be2-storage:/opt/starrocks/be/storage
+      - starrocks-be2-log:/opt/starrocks/be/log
+      - ./config:/config:ro
+    
     depends_on:
-      starrocks-fe-1:
+      starrocks-fe1:
         condition: service_healthy
-      starrocks-be-1:
-        condition: service_healthy
-      starrocks-be-2:
-        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    
+    restart: unless-stopped
+
+  starrocks-be3:
+    image: starrocks/be-ubuntu:3.3-latest
+    hostname: starrocks-be3
+    container_name: starrocks-be-3
+    user: root
+    
+    entrypoint: /bin/bash
+    command:
+      - /config/start-be.sh
+      - starrocks-be3
+      - "45"
+      - starrocks-fe1
+      - "9030"
+      - be3
+    
+    environment:
+      - JAVA_OPTS=-Xms2048m -Xmx2048m
+    
+    ports:
+      - "8042:8040"
+      - "9052:9050"
+      - "9062:9060"
+    
     networks:
-      - starrocks_net
-    command: >
-      bash -c "
-      sleep 20 &&
-      echo 'Registering Backend 1' &&
-      mysql -uroot -hstarrocks-fe-1 -P9030 <<< 'ALTER SYSTEM ADD BACKEND \"starrocks-be-1:9050\";' &&
-      echo 'Registering Backend 2' &&
-      mysql -uroot -hstarrocks-fe-1 -P9030 <<< 'ALTER SYSTEM ADD BACKEND \"starrocks-be-2:9050\";' &&
-      echo 'Initialization complete!'
-      "
-    restart: "no"
+      starrocks_network:
+        ipv4_address: 172.25.0.22
+    
+    volumes:
+      - starrocks-be3-storage:/opt/starrocks/be/storage
+      - starrocks-be3-log:/opt/starrocks/be/log
+      - ./config:/config:ro
+    
+    depends_on:
+      starrocks-fe1:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    
+    restart: unless-stopped
+
+  starrocks-be4:
+    image: starrocks/be-ubuntu:3.3-latest
+    hostname: starrocks-be4
+    container_name: starrocks-be-4
+    user: root
+    
+    entrypoint: /bin/bash
+    command:
+      - /config/start-be.sh
+      - starrocks-be4
+      - "50"
+      - starrocks-fe1
+      - "9030"
+      - be4
+    
+    environment:
+      - JAVA_OPTS=-Xms2048m -Xmx2048m
+    
+    ports:
+      - "8043:8040"
+      - "9053:9050"
+      - "9063:9060"
+    
+    networks:
+      starrocks_network:
+        ipv4_address: 172.25.0.23
+    
+    volumes:
+      - starrocks-be4-storage:/opt/starrocks/be/storage
+      - starrocks-be4-log:/opt/starrocks/be/log
+      - ./config:/config:ro
+    
+    depends_on:
+      starrocks-fe1:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8040/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    
+    restart: unless-stopped
+
+volumes:
+  # Frontend Volumes
+  starrocks-fe1-meta:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/fe1-meta
+  
+  starrocks-fe1-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/fe1-log
+  
+  starrocks-fe2-meta:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/fe2-meta
+  
+  starrocks-fe2-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/fe2-log
+  
+  # Backend Volumes
+  starrocks-be1-storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be1-storage
+  
+  starrocks-be1-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be1-log
+  
+  starrocks-be2-storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be2-storage
+  
+  starrocks-be2-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be2-log
+  
+  starrocks-be3-storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be3-storage
+  
+  starrocks-be3-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be3-log
+  
+  starrocks-be4-storage:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be4-storage
+  
+  starrocks-be4-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/starrocks-volumes/be4-log
 
 networks:
-  starrocks_net:
+  starrocks_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.18.0.0/16
-          gateway: 172.18.0.1
-
-volumes:
-  fe1_meta:
-    driver: local
-  fe1_logs:
-    driver: local
-  fe2_meta:
-    driver: local
-  fe2_logs:
-    driver: local
-  be1_storage:
-    driver: local
-  be1_logs:
-    driver: local
-  be2_storage:
-    driver: local
-  be2_logs:
-    driver: local
+        - subnet: 172.25.0.0/24

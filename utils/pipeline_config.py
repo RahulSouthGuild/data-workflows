@@ -66,7 +66,7 @@ class Config:
     # SCHEMA_PATHS = [
     #     Path("/schemas/files_schema.json"),  # Local directory
     #     PROJECT_ROOT / "schemas" / "files_schema.json",
-    #     PROJECT_ROOT / "pidilite-pipeline-utils" / "schemas" / "files_schema.json",
+    #     PROJECT_ROOT / "datawiz-pipeline-utils" / "schemas" / "files_schema.json",
     # ]
 
     @classmethod

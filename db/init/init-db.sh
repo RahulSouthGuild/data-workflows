@@ -35,10 +35,16 @@ CREATE DATABASE IF NOT EXISTS datawiz;
 CREATE USER IF NOT EXISTS 'datawiz_admin'@'%' IDENTIFIED BY '0jqhC3X541tP1RmR.5';
 
 -- Grant all privileges on datawiz database to datawiz_admin
-GRANT ALL PRIVILEGES ON datawiz.* TO 'datawiz_admin'@'%';
+GRANT ALL ON DATABASE datawiz TO 'datawiz_admin'@'%';
+
+-- Grant ALL on all tables in datawiz database
+GRANT ALL ON ALL TABLES IN DATABASE datawiz TO 'datawiz_admin'@'%';
 
 -- Grant necessary global privileges for user operations
 GRANT SELECT ON information_schema.* TO 'datawiz_admin'@'%';
+
+-- Show grants for user
+SHOW GRANTS FOR 'datawiz_admin'@'%';
 
 -- Show databases
 SHOW DATABASES;

@@ -3,11 +3,11 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pidilite-datawiz"
+name = "datawiz"
 version = "2.0.0"
-description = "Pidilite DataWiz - ETL Pipeline for StarRocks with Azure Blob Storage"
+description = "DataWiz - ETL Pipeline for StarRocks with Azure Blob Storage"
 authors = [
-    {name = "Rahul", email = "rahul@pidilite.com"}
+    {name = "Rahul", email = "rahul@example.com"}
 ]
 requires-python = ">=3.9"
 readme = "README.md"

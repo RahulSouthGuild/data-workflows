@@ -25,6 +25,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from utils.pipeline_config import Config, DAILY_FIS_INCREMENTAL_SERVICE_NAME, LOG_SEPARATOR
 from utils.logging_utils import get_pipeline_logger, with_status_tracking
+from core.loaders.starrocks_stream_loader import StarRocksStreamLoader
 from core.transformers.transformation_engine import (
     validate_and_transform_dataframe,
     get_table_name_from_file,
@@ -70,40 +71,7 @@ def get_starrocks_connection():
     )
 
 
-def stream_load_csv(table_name, csv_file_path, chunk_id=None, columns=None):
-    """Load CSV data into StarRocks using Stream Load API"""
-    url = f"http://{STARROCKS_CONFIG['host']}:{STARROCKS_CONFIG['http_port']}/api/{STARROCKS_CONFIG['database']}/{table_name}/_stream_load"
-
-    # Generate unique label: timestamp_chunk_uuid
-    # This ensures no label duplication even with fast consecutive requests
-    unique_id = str(uuid.uuid4())[:8]  # Use first 8 chars of UUID
-    headers = {
-        "label": f"{table_name}_{int(time.time())}_{chunk_id if chunk_id else ''}_{unique_id}",
-        "column_separator": "\x01",
-        "format": "CSV",
-        "max_filter_ratio": str(Config.MAX_ERROR_RATIO),
-        "strict_mode": "false",
-        "timezone": "Asia/Shanghai",
-        "Expect": "100-continue",
-    }
-
-    if columns:
-        headers["columns"] = ",".join(columns)
-
-    auth = (STARROCKS_CONFIG["user"], STARROCKS_CONFIG["password"])
-
-    try:
-        with open(csv_file_path, "rb") as f:
-            file_data = f.read()
-
-        response = requests.put(
-            url, headers=headers, data=file_data, auth=auth, timeout=Config.STREAM_LOAD_TIMEOUT
-        )
-
-        result = response.json()
-        return result.get("Status") == "Success", result
-    except Exception as e:
-        return False, {"Message": str(e)}
+# Stream Load is now handled by StarRocksStreamLoader from core.loaders
 
 
 def acquire_lock(task_logger):
@@ -351,10 +319,13 @@ async def insert_chunk(sem, chunk, bar, task_logger, db_column_order=None, attem
             # Write parquet to CSV with column separator
             chunk.write_csv(csv_path, separator="\x01", include_header=False)
 
-            # Load via Stream Load with explicit column mapping
-            success, result = stream_load_csv(
-                "fact_invoice_secondary", csv_path, columns=db_column_order
-            )
+            # Load via Stream Load with explicit column mapping using centralized loader
+            with StarRocksStreamLoader(Config.get_db_config(), logger=task_logger) as loader:
+                success, result = loader.stream_load_csv(
+                    table_name="fact_invoice_secondary",
+                    csv_file_path=csv_path,
+                    columns=db_column_order,
+                )
 
             # Clean up temp file
             Path(csv_path).unlink(missing_ok=True)

@@ -1,4 +1,4 @@
-w"""
+"""
 Database setup for RLS system
 Creates necessary tables in PostgreSQL
 """

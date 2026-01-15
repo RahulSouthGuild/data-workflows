@@ -1,5 +1,5 @@
 """
-Centralized configuration management for Pidilite DataWiz.
+Centralized configuration management for DataWiz.
 Consolidates DB_CONFIG, AZURE_CONFIG, MONGODB_URI from incremental_utils.py
 """
 
@@ -41,7 +41,7 @@ AZURE_CONFIG: Dict[str, Any] = {
 
 # MongoDB Configuration
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "pidilite")
+MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "datawiz")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "business_constants")
 
 # Email Configuration
@@ -51,13 +51,13 @@ EMAIL_CONFIG: Dict[str, Any] = {
     "smtp_user": os.getenv("SMTP_USER", ""),
     "smtp_password": os.getenv("SMTP_PASSWORD", ""),
     "use_tls": os.getenv("SMTP_USE_TLS", "true").lower() == "true",
-    "from_email": os.getenv("EMAIL_FROM", "noreply@pidilite.com"),
+    "from_email": os.getenv("EMAIL_FROM", "noreply@example.com"),
     "recipients": os.getenv("EMAIL_RECIPIENTS", "").split(","),
 }
 
 # Observability Configuration
 SIGNOZ_ENDPOINT = os.getenv("SIGNOZ_ENDPOINT", "http://localhost:4317")
-OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "pidilite-datawiz")
+OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "datawiz")
 ENABLE_TRACING = os.getenv("ENABLE_TRACING", "true").lower() == "true"
 ENABLE_METRICS = os.getenv("ENABLE_METRICS", "true").lower() == "true"
 

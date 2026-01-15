@@ -14,7 +14,7 @@ def get_column_mappings_dir() -> Path:
     """Get the path to the column_mappings directory."""
     # Try multiple locations
     base_paths = [
-        Path("/home/rahul/RahulSouthGuild/pidilite_datawiz/db/column_mappings"),
+        Path("/home/rahul/RahulSouthGuild/datawiz/db/column_mappings"),
         Path.cwd() / "db" / "column_mappings",
         Path(__file__).parent.parent / "db" / "column_mappings",
     ]

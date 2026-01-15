@@ -2,7 +2,6 @@ import time
 from pathlib import Path
 import polars as pl
 import pandas as pd
-import requests
 import tempfile
 import os
 from tqdm import tqdm
@@ -15,10 +14,11 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from utils.DB_CONFIG import DB_CONFIG  # noqa: E402
+from core.loaders.starrocks_stream_loader import StarRocksStreamLoader  # noqa: E402
 
 init(autoreset=True)
 
-print(DB_CONFIG)
+# print(DB_CONFIG)  # Commented: unnecessary config output
 
 RED, GREEN, YELLOW, RESET = "\033[31m", "\033[32m", "\033[33m", "\033[0m"
 CYAN = "\033[36m"
@@ -26,7 +26,7 @@ CYAN = "\033[36m"
 # StarRocks Stream Load Configuration
 STARROCKS_CONFIG = {
     "host": DB_CONFIG["host"],
-    "mysql_port": DB_CONFIG["port"],
+    "port": DB_CONFIG["port"],
     "http_port": int(os.getenv("STARROCKS_HTTP_PORT", "8040")),
     "user": DB_CONFIG["user"],
     "password": DB_CONFIG["password"],
@@ -39,116 +39,20 @@ MAX_ERROR_RATIO = 0.1  # 10% error tolerance
 CHUNK_SIZE = 100000  # Records per chunk
 
 
-def stream_load_csv(table_name, csv_file_path, chunk_id=None, columns=None):
-    """Load CSV data into StarRocks using Stream Load API
-
-    Args:
-        table_name: Target table name
-        csv_file_path: Path to CSV file
-        chunk_id: Chunk identifier for logging
-        columns: List of column names to map CSV columns to database columns (in order)
-    """
-    # Prepare the Stream Load URL
-    url = f"http://{STARROCKS_CONFIG['host']}:{STARROCKS_CONFIG['http_port']}/api/{STARROCKS_CONFIG['database']}/{table_name}/_stream_load"
-
-    # Prepare headers
-    headers = {
-        "label": f"{table_name}_{int(time.time())}_{chunk_id if chunk_id else ''}",
-        "column_separator": "\x01",
-        "format": "CSV",
-        "max_filter_ratio": str(MAX_ERROR_RATIO),
-        "strict_mode": "false",
-        "timezone": "Asia/Shanghai",
-        "Expect": "100-continue",
-    }
-
-    # Add columns specification if provided (CRITICAL for correct column mapping!)
-    if columns:
-        headers["columns"] = ",".join(columns)
-
-    # Authentication
-    auth = (STARROCKS_CONFIG["user"], STARROCKS_CONFIG["password"])
-
-    try:
-        # Read the file
-        with open(csv_file_path, "rb") as f:
-            file_data = f.read()
-
-        # Execute Stream Load
-        response = requests.put(
-            url, headers=headers, data=file_data, auth=auth, timeout=STREAM_LOAD_TIMEOUT
-        )
-
-        # Parse response
-        result = response.json()
-
-        if result.get("Status") == "Success":
-            return True, result
-        else:
-            # Get detailed error information
-            status = result.get("Status", "Unknown")
-            message = result.get("Message", "No message provided")
-            total = result.get("NumberTotalRows", 0)
-            loaded = result.get("NumberLoadedRows", 0)
-            filtered = result.get("NumberFilteredRows", 0)
-
-            # Check if this is a critical failure (too many filtered rows)
-            if filtered > 0 and total > 0:
-                filter_ratio = (filtered / total) * 100
-                is_critical = filter_ratio > (MAX_ERROR_RATIO * 100)
-            else:
-                is_critical = status == "Fail"
-
-            # Print error in red if critical, yellow if warning
-            error_color = RED if is_critical else YELLOW
-            error_type = "ERROR" if is_critical else "WARNING"
-
-            print(f"{error_color}❌ Stream Load {error_type} for chunk {chunk_id}:{RESET}")
-            print(f"{error_color}  Status: {status}{RESET}")
-            print(f"{error_color}  Message: {message}{RESET}")
-
-            if total > 0:
-                filter_percentage = (filtered / total) * 100 if total > 0 else 0
-                print(f"{error_color}  Total Rows: {total:,}{RESET}")
-                print(f"{error_color}  Loaded Rows: {loaded:,}{RESET}")
-                print(
-                    f"{error_color}  Filtered Rows: {filtered:,} ({filter_percentage:.1f}%){RESET}"
-                )
-
-                # Additional diagnostics
-                if filtered > 0:
-                    print(f"{error_color}  ⚠️  High filter ratio detected!{RESET}")
-                    print(f"{error_color}     This typically means:{RESET}")
-                    print(f"{error_color}     1. Data types don't match schema columns{RESET}")
-                    print(
-                        f"{error_color}     2. Column values are NULL when NOT NULL is required{RESET}"
-                    )
-                    print(
-                        f"{error_color}     3. Data values are out of range for the column type{RESET}"
-                    )
-                    print(
-                        f"{error_color}     4. Column count mismatch between CSV and table{RESET}"
-                    )
-
-            return False, result
-
-    except Exception as e:
-        print(f"{RED}❌ Stream Load ERROR - Exception:{RESET}")
-        print(f"{RED}  {str(e)}{RESET}")
-        return False, {"Message": str(e)}
-
-
 def get_starrocks_connection():
     """Create StarRocks MySQL connection for metadata operations"""
     return pymysql.connect(
         host=STARROCKS_CONFIG["host"],
-        port=STARROCKS_CONFIG["mysql_port"],
+        port=STARROCKS_CONFIG["port"],
         user=STARROCKS_CONFIG["user"],
         password=STARROCKS_CONFIG["password"],
         database=STARROCKS_CONFIG["database"],
         charset="utf8mb4",
         autocommit=True,
     )
+
+
+# Stream Load is now handled by StarRocksStreamLoader from core.loaders
 
 
 def get_table_columns(conn, table_name):
@@ -289,9 +193,12 @@ def process_records(file, delete_existing=True):
         if delete_existing:
             delete_existing_records(table_name, stem)
 
-        # Read parquet file
+        # Get row count using lazy load (without loading all data)
+        lf = pl.scan_parquet(file)
+        total = lf.select(pl.len()).collect().item()
+        
+        # Now load the actual data
         df = pl.read_parquet(file)
-        total = df.height
 
         if total == 0:
             print(f"{YELLOW}No records to process{RESET}")
@@ -419,12 +326,22 @@ def process_records(file, delete_existing=True):
 
             ordered_columns = []
             ordered_db_columns = []
+            missing_columns = []
 
             for db_col in db_columns_list:
                 db_col_lower = db_col.lower()
                 if db_col_lower in df_columns_lower:
                     ordered_columns.append(df_columns_lower[db_col_lower])
                     ordered_db_columns.append(db_col)
+                else:
+                    missing_columns.append(db_col)
+
+            # CRITICAL: Check if any DB columns are missing from parquet
+            if missing_columns:
+                print(f"{RED}⚠️  WARNING: {len(missing_columns)} columns missing in parquet data!{RESET}")
+                print(f"{RED}Missing columns: {missing_columns}{RESET}")
+                print(f"{YELLOW}Parquet has: {list(csv_columns)}{RESET}")
+                raise ValueError(f"Parquet missing required columns: {missing_columns}")
 
             # Reorder dataframe to match database table order
             if ordered_columns:
@@ -433,6 +350,8 @@ def process_records(file, delete_existing=True):
             print(
                 f"{GREEN}✓ Column mapping verified - {len(ordered_db_columns)} columns will be loaded{RESET}"
             )
+            # print(f"{CYAN}📋 CSV Column Order (Parquet names): {ordered_columns}{RESET}")  # Commented: verbose
+            # print(f"{CYAN}📋 DB Column Order (StarRocks names): {ordered_db_columns}{RESET}")  # Commented: verbose
         except Exception as e:
             print(f"{YELLOW}⚠️  Could not verify column order: {e}{RESET}")
             # Fallback: use columns as-is
@@ -459,15 +378,48 @@ def process_records(file, delete_existing=True):
                         # Export to CSV with SOH (\x01) delimiter
                         # SOH (Start of Heading) is rarely found in data and avoids issues with commas in fields
                         chunk_pd = chunk.to_pandas()
-                        chunk_pd.to_csv(tmp_file.name, sep="\x01", header=False, index=False)
+                        
+                        # CRITICAL: Write columns in the exact order specified in ordered_columns
+                        # This matches the order sent to StarRocks in the "columns" header
+                        if ordered_columns:
+                            chunk_pd = chunk_pd[ordered_columns]
+                        
+                        # Write CSV without converting NaN to empty strings
+                        # We'll use the na_rep parameter and null_marker in Stream Load
+                        chunk_pd.to_csv(tmp_file.name, sep="\x01", header=False, index=False, na_rep='\\N')
 
-                        # Load using Stream Load with explicit column mapping
-                        success, result = stream_load_csv(
-                            table_name,
-                            tmp_file.name,
-                            chunk_id=chunk_num,
-                            columns=ordered_db_columns,
-                        )
+                        # Debug: Show what columns are being sent vs expected
+                        # print(f"{CYAN}📤 Sending Stream Load request:{RESET}")  # Commented: verbose
+                        # print(f"  CSV columns (order written): {list(chunk_pd.columns)}")  # Commented: verbose
+                        # print(f"  DB columns (expected order): {ordered_db_columns}")  # Commented: verbose
+                        # print(f"  Total columns: {len(ordered_db_columns)}")  # Commented: verbose
+                        # print(f"  Total rows in chunk: {len(chunk_pd)}")  # Commented: verbose
+                        # print(f"  CSV file size: {os.path.getsize(tmp_file.name)} bytes")  # Commented: verbose
+                        
+                        # Sample first few rows to debug data issues
+                        # if chunk_num == 1:  # Only show for first chunk to avoid spam  # Commented: debug output
+                        #     print(f"\n{CYAN}📊 Sample data (first 3 rows of first 10 columns):{RESET}")
+                        #     sample_cols = ordered_db_columns[:10]
+                        #     for idx, row_idx in enumerate(range(min(3, len(chunk_pd)))):
+                        #         row_data = []
+                        #         for col in sample_cols:
+                        #             val = chunk_pd.iloc[row_idx][col]
+                        #             # Show value, type, and if it's null
+                        #             is_null = pd.isna(val)
+                        #             row_data.append(f"{col}={repr(val)[:30]}{'(NULL)' if is_null else ''}")
+                        #         print(f"  Row {row_idx+1}: {' | '.join(row_data)}")
+
+
+                        # Load using centralized Stream Loader with explicit column mapping
+                        # STRICT: 0% error tolerance - all rows must be valid
+                        with StarRocksStreamLoader(STARROCKS_CONFIG, logger=None) as loader:
+                            success, result = loader.stream_load_csv(
+                                table_name=table_name,
+                                csv_file_path=tmp_file.name,
+                                chunk_id=chunk_num,
+                                columns=ordered_db_columns,
+                                null_marker='\\N',  # Use \N for NULL values (MySQL standard)
+                            )
 
                         if success:
                             successful_chunks += 1
@@ -475,12 +427,27 @@ def process_records(file, delete_existing=True):
                             total_rows_loaded += rows_loaded
                         else:
                             failed_chunks += 1
+                            # Extract detailed error info
+                            filtered = result.get("NumberFilteredRows", 0)
+                            total = result.get("NumberTotalRows", 0)
+                            error_msg = result.get("Message", "Unknown error")
+                            error_url = result.get("ErrorURL", "No error URL")
+                            
+                            # Print detailed failure info for debugging
+                            print(f"\n{RED}❌ Stream Load FAILED (Chunk {chunk_num}/3){RESET}")
+                            print(f"  Status: {result.get('Status', 'Unknown')}")
+                            print(f"  Message: {error_msg}")
+                            print(f"  Loaded rows: {result.get('NumberLoadedRows', 0)}/{total}")
+                            print(f"  Filtered rows: {filtered}/{total} ({100*filtered/total if total > 0 else 0:.1f}%)")
+                            print(f"  Error log: {error_url}")
+                            
                             failed_chunk_details.append(
                                 {
                                     "chunk": chunk_num,
-                                    "filtered": result.get("NumberFilteredRows", 0),
-                                    "total": result.get("NumberTotalRows", 0),
-                                    "message": result.get("Message", "Unknown error"),
+                                    "filtered": filtered,
+                                    "total": total,
+                                    "message": error_msg,
+                                    "error_url": error_url,
                                 }
                             )
 
@@ -496,6 +463,29 @@ def process_records(file, delete_existing=True):
 
         total_time = time.time() - start
         print(f"\n{GREEN}Loaded {total_rows_loaded:,}/{total:,} rows in {total_time:.2f}s{RESET}")
+        
+        # Count rows in table after load
+        if failed_chunks == 0:  # Only count if all chunks succeeded
+            try:
+                conn = get_starrocks_connection()
+                with conn.cursor() as cursor:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                    db_row_count = cursor.fetchone()[0]
+                conn.close()
+                
+                # Show comparison
+                print(f"\n{CYAN}{'='*60}{RESET}")
+                print(f"{CYAN}📊 LOAD SUMMARY{RESET}")
+                print(f"{CYAN}{'='*60}{RESET}")
+                print(f"{GREEN}  Parquet rows (using lazy load): {total:,}{RESET}")
+                print(f"{GREEN}  Rows inserted to DB:          {db_row_count:,}{RESET}")
+                if total == db_row_count:
+                    print(f"{GREEN}  ✅ ALL ROWS LOADED SUCCESSFULLY!{RESET}")
+                else:
+                    print(f"{RED}  ⚠️  Row count mismatch! Expected {total:,}, got {db_row_count:,}{RESET}")
+                print(f"{CYAN}{'='*60}{RESET}\n")
+            except Exception as e:
+                print(f"{YELLOW}⚠️  Could not verify row count: {e}{RESET}")
 
         if failed_chunks > 0:
             print(

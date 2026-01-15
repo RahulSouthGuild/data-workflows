@@ -1,8 +1,6 @@
 import sys
 import time
 import pymysql
-import uuid
-import requests
 import csv
 from pathlib import Path
 from datetime import datetime
@@ -16,6 +14,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from utils.pipeline_config import Config, DAILY_DD_LOGIC_SERVICE_NAME, LOG_SEPARATOR
 from utils.logging_utils import get_pipeline_logger, with_status_tracking
+from core.loaders.starrocks_stream_loader import StarRocksStreamLoader
 
 # Import constants from Config for backward compatibility
 FACT_CHUNK_SIZE = Config.FACT_CHUNK_SIZE
@@ -103,51 +102,7 @@ def get_starrocks_connection():
     )
 
 
-def stream_load_csv(table_name, csv_file_path, chunk_id=None, columns=None, task_logger=None):
-    """Load CSV data into StarRocks using Stream Load API"""
-    url = f"http://{STARROCKS_CONFIG['host']}:{STARROCKS_CONFIG['http_port']}/api/{STARROCKS_CONFIG['database']}/{table_name}/_stream_load"
-
-    unique_id = str(uuid.uuid4())[:8]
-    headers = {
-        "label": f"{table_name}_{int(time.time())}_{chunk_id if chunk_id else ''}_{unique_id}",
-        "column_separator": "\x01",
-        "format": "CSV",
-        "max_filter_ratio": "1.0",  # Allow all rows to be filtered (for debugging)
-        "strict_mode": "false",
-        "timezone": "Asia/Shanghai",
-        "Expect": "100-continue",
-    }
-
-    if columns:
-        headers["columns"] = ",".join(columns)
-
-    auth = (STARROCKS_CONFIG["user"], STARROCKS_CONFIG["password"])
-
-    try:
-        with open(csv_file_path, "rb") as f:
-            file_data = f.read()
-
-        response = requests.put(
-            url, headers=headers, data=file_data, auth=auth, timeout=Config.STREAM_LOAD_TIMEOUT
-        )
-
-        result = response.json()
-        if task_logger:
-            task_logger.info(f"Stream Load Response: {result}")
-
-        if result.get("Status") == "Success":
-            return True
-        else:
-            error_msg = result.get("Message", "Unknown error")
-            if task_logger:
-                task_logger.error(f"Stream Load Error: {error_msg}")
-                if "error_log" in result.get("ErrorURL", ""):
-                    task_logger.error(f"Error Log URL: {result['ErrorURL']}")
-            return False
-    except Exception as e:
-        if task_logger:
-            task_logger.error(f"Stream Load Exception: {str(e)}")
-        return False
+# Stream Load is now handled by StarRocksStreamLoader from core.loaders
 
 
 @with_status_tracking(DAILY_DD_LOGIC_SERVICE_NAME)
@@ -237,14 +192,23 @@ def run_dd_logic(main_logger=None):
                 f"📋 Columns: {', '.join(fieldnames[:5])}... ({len(fieldnames)} total)"
             )
 
-            # Use Stream Load API for fast bulk insert with column mapping
-            success = stream_load_csv(
-                table_name="fact_invoice_secondary",
-                csv_file_path=str(csv_path),
-                chunk_id="dd_logic",
-                columns=fieldnames,
-                task_logger=task_logger,
-            )
+            # Use centralized Stream Load API with connection pooling
+            with StarRocksStreamLoader(Config.get_db_config(), logger=task_logger) as loader:
+                success, result = loader.stream_load_csv(
+                    table_name="fact_invoice_secondary",
+                    csv_file_path=str(csv_path),
+                    chunk_id="dd_logic",
+                    columns=fieldnames,
+                )
+
+                if not success:
+                    error_msg = (
+                        result.get("Message", "Unknown error")
+                        if isinstance(result, dict)
+                        else str(result)
+                    )
+                    task_logger.error(f"Stream Load failed: {error_msg}")
+                    raise Exception(f"Stream Load Error: {error_msg}")
 
             if success:
                 insert_count = len(records)

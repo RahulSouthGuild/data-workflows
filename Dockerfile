@@ -1,4 +1,4 @@
-# Pidilite DataWiz - ETL Application Dockerfile
+# DataWiz - ETL Application Dockerfile
 FROM python:3.11-slim
 
 # Set working directory
