@@ -1,0 +1,30 @@
+# Computed Columns Configuration
+# Auto-converted from db/computed_columns.json
+# Contains derived/calculated columns for fact tables
+
+fact_invoice_secondary:
+  fis_sg_id_cc_in:
+    type: concatenation
+    columns:
+    - invoice_date
+    - customer_code
+    - invoice_no
+    separator: _
+    datatype: VARCHAR(40)
+    polars_type: Utf8
+    description: Generated as concatenation of invoice_date, customer_code and invoice_no
+      with underscore separator
+fact_invoice_details:
+  fid_pd_cc_in_mt_in:
+    type: concatenation
+    columns:
+    - posting_date
+    - customer_code
+    - invoice_no
+    - mis_type
+    - item_number
+    separator: _
+    datatype: VARCHAR(70)
+    polars_type: Utf8
+    description: Generated as concatenation of posting_date, customer_code, invoice_no,
+      mis_type, item_number with underscore separator

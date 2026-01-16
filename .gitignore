@@ -2,3 +2,5 @@
 __pycache__/
 **/__pycache__/
 **.log
+# Tenant configuration secrets
+configs/tenants/*/.env

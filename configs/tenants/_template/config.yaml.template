@@ -1,0 +1,331 @@
+# ==============================================================================
+# Pidilite DataWiz - Tenant Configuration Template
+# ==============================================================================
+# Copy this template to create a new tenant configuration:
+#   cp -r configs/tenants/_template configs/tenants/{tenant_slug}
+#   Edit config.yaml with tenant-specific values
+#
+# Replace placeholders:
+#   {TENANT_UUID} - Generate with: python -c "import uuid; print(uuid.uuid4())"
+#   {TENANT_SLUG} - Human-readable name (e.g., "pidilite-mumbai")
+#   {TENANT_NAME} - Full display name (e.g., "Pidilite Mumbai Operations")
+#   {DATABASE_NAME} - StarRocks database (e.g., "datawiz_pidilite_mumbai")
+#   {STORAGE_PROVIDER} - azure, aws, gcp, minio, local
+#   {BC_BACKEND} - postgres, mysql, mongodb, starrocks
+#
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Tenant Metadata
+tenant_id: "{TENANT_UUID}"               # UUID for uniqueness
+tenant_slug: "{TENANT_SLUG}"             # Human-readable identifier
+tenant_name: "{TENANT_NAME}"             # Full display name
+enabled: true                            # Set to false to disable processing
+
+# Database Configuration
+database:
+  database_name: "{DATABASE_NAME}"       # StarRocks database name
+  user: "{TENANT_SLUG}_admin"            # Database user (create separately)
+  # Password stored in .env file: DB_PASSWORD
+
+  # Override defaults from configs/shared/default_config.yaml if needed
+  # host: "localhost"
+  # port: 9030
+  # http_port: 8040
+
+
+# ==============================================================================
+# Cloud Storage Provider Configuration
+# ==============================================================================
+# Choose ONE provider: azure, aws, gcp, minio, local
+# Uncomment and fill in the section for your chosen provider
+
+storage_provider: "{STORAGE_PROVIDER}"   # azure, aws, gcp, minio, local
+
+# -----------------------------------------------------------------------------
+# OPTION 1: Azure Blob Storage
+# -----------------------------------------------------------------------------
+# storage_config:
+#   # Azure-specific settings
+#   container_name: "your-container-name"
+#   folder_prefix: "synapse_data/"       # Optional: folder path within container
+#
+#   # Authentication method: connection_string, sas_token, or service_principal
+#   auth_method: "connection_string"
+#
+#   # Required .env variables (based on auth_method):
+#   # - connection_string: AZURE_STORAGE_CONNECTION_STRING
+#   # - sas_token: AZURE_SAS_TOKEN
+#   # - service_principal: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+#
+#   # Optional: Override defaults
+#   # api_version: "2023-01-03"
+#   # max_single_put_size: 67108864      # 64 MB
+
+# -----------------------------------------------------------------------------
+# OPTION 2: AWS S3
+# -----------------------------------------------------------------------------
+# storage_config:
+#   # AWS S3-specific settings
+#   bucket_name: "your-bucket-name"
+#   region: "ap-south-1"                 # AWS region (e.g., ap-south-1, us-east-1)
+#   folder_prefix: "raw_data/"           # Optional: folder path within bucket
+#
+#   # Authentication method: iam_role (recommended) or access_key
+#   auth_method: "iam_role"
+#
+#   # Required .env variables (if auth_method: access_key):
+#   # AWS_ACCESS_KEY_ID
+#   # AWS_SECRET_ACCESS_KEY
+#
+#   # Optional: Override defaults
+#   # signature_version: "s3v4"
+#   # use_ssl: true
+
+# -----------------------------------------------------------------------------
+# OPTION 3: Google Cloud Storage
+# -----------------------------------------------------------------------------
+# storage_config:
+#   # GCP-specific settings
+#   bucket_name: "your-bucket-name"
+#   project_id: "your-gcp-project-id"
+#   folder_prefix: "exports/"            # Optional: folder path within bucket
+#
+#   # Authentication method: service_account (recommended) or workload_identity
+#   auth_method: "service_account"
+#
+#   # Required .env variables:
+#   # GCP_SERVICE_ACCOUNT_JSON           # JSON key file content
+#
+#   # Optional: Override defaults
+#   # api_endpoint: "https://storage.googleapis.com"
+
+# -----------------------------------------------------------------------------
+# OPTION 4: MinIO (Self-hosted S3-compatible)
+# -----------------------------------------------------------------------------
+# storage_config:
+#   # MinIO-specific settings
+#   endpoint: "https://minio.yourcompany.com"  # MinIO server URL
+#   bucket_name: "your-bucket-name"
+#   folder_prefix: "data/"               # Optional: folder path within bucket
+#
+#   # Authentication method: access_key
+#   auth_method: "access_key"
+#
+#   # Required .env variables:
+#   # MINIO_ACCESS_KEY
+#   # MINIO_SECRET_KEY
+#
+#   # Optional: Override defaults
+#   # use_ssl: true
+#   # signature_version: "s3v4"
+
+# -----------------------------------------------------------------------------
+# OPTION 5: Local Filesystem
+# -----------------------------------------------------------------------------
+# storage_config:
+#   # Local filesystem settings
+#   base_path: "/data/{TENANT_SLUG}"     # Base path for data files
+#
+#   # No authentication required
+#   # Optional: Override defaults
+#   # use_symlinks: false
+#   # verify_checksums: true
+
+
+# ==============================================================================
+# Business Constants Storage
+# ==============================================================================
+# Choose ONE backend: postgres, mysql, mongodb, starrocks
+# Uncomment and fill in the section for your chosen backend
+
+business_constants:
+  enabled: true
+  backend: "{BC_BACKEND}"                # postgres, mysql, mongodb, starrocks
+
+  # -----------------------------------------------------------------------------
+  # OPTION 1: PostgreSQL (Recommended for production)
+  # -----------------------------------------------------------------------------
+  # database: "metadata_db"
+  # table: "business_constants"
+  #
+  # Required .env variable:
+  # BC_{FIRST_8_UUID}_PG_URI=postgresql://user:password@host:port/database
+  # Example: BC_3607d64c_PG_URI=postgresql://...
+
+  # -----------------------------------------------------------------------------
+  # OPTION 2: MySQL/MariaDB
+  # -----------------------------------------------------------------------------
+  # database: "metadata_db"
+  # table: "business_constants"
+  #
+  # Required .env variable:
+  # BC_{FIRST_8_UUID}_MYSQL_URI=mysql://user:password@host:port/database
+
+  # -----------------------------------------------------------------------------
+  # OPTION 3: MongoDB
+  # -----------------------------------------------------------------------------
+  # database: "metadata_db"
+  # collection: "business_constants"
+  #
+  # Required .env variable:
+  # BC_{FIRST_8_UUID}_MONGO_URI=mongodb://user:password@host:port/database
+
+  # -----------------------------------------------------------------------------
+  # OPTION 4: StarRocks (Use main database)
+  # -----------------------------------------------------------------------------
+  # table_name: "business_constants"
+  # # Uses main database connection (no separate .env variable needed)
+
+
+# Data Paths (relative to project root)
+# Inherits from configs/shared/default_config.yaml with tenant_slug interpolation
+data_paths:
+  base: "data"
+
+  # Override specific paths if needed
+  # historical:
+  #   source_files: "data/{TENANT_SLUG}/historical/source_files"
+  #   raw_parquet: "data/{TENANT_SLUG}/historical/raw_parquet"
+  #   cleaned_parquet: "data/{TENANT_SLUG}/historical/cleaned_parquet"
+
+
+# Logging Configuration
+# Inherits from configs/shared/default_config.yaml with tenant_slug interpolation
+logging:
+  base_path: "logs"
+
+  # Override log levels if needed
+  # levels:
+  #   default: "INFO"
+  #   etl: "DEBUG"                       # More verbose logging for ETL
+
+
+# Business Rules (Tenant-Specific)
+business_rules:
+  # Date filters (example: filter data >= 2023-04-01)
+  date_filter_start: "20230401"          # YYYYMMDD format
+
+  # Sales thresholds
+  sales_threshold: 10000                 # Minimum sales amount
+
+  # Material type filters
+  material_type_filter: ["ZFGD"]         # Material types to include
+
+  # Fiscal year settings
+  fiscal_year:
+    start_month: 4                       # April (4) start of fiscal year
+    end_month: 3                         # March (3) end of fiscal year
+
+  # Custom business logic (add tenant-specific rules here)
+  # Example:
+  # exclude_customers: ["CUST001", "CUST002"]  # Exclude test customers
+  # include_regions: ["West", "North"]         # Include specific regions
+
+
+# Scheduler Configuration
+scheduler:
+  timezone: "Asia/Kolkata"               # IST timezone
+
+  # Enable/disable job categories
+  enable_evening_jobs: true              # Evening dimension sync jobs
+  enable_morning_jobs: true              # Morning fact load jobs
+
+  # Job timing overrides (if different from default)
+  # evening_start_time: "18:00"          # 6:00 PM
+  # morning_start_time: "09:00"          # 9:00 AM
+
+  # Timeout overrides (seconds)
+  # job_timeout: 3600                    # 1 hour
+
+
+# Observability Configuration
+observability:
+  service_name: "datawiz-{TENANT_SLUG}"  # Service name for tracing
+
+  # Override defaults if needed
+  # enabled: true
+  # tracing:
+  #   enabled: true
+  #   sample_rate: 1.0                   # Sample 100% of traces
+
+
+# Notification Configuration
+notifications:
+  # Email recipients for this tenant
+  email:
+    enabled: true
+    recipients:
+      - "admin@yourcompany.com"
+      - "ops@yourcompany.com"
+
+    # Override notification settings if needed
+    # on_success: false
+    # on_failure: true
+
+
+# Feature Flags (Override global defaults)
+features:
+  enable_rls: true                       # Row-level security
+  enable_matviews: true                  # Materialized views
+  enable_dd_logic: true                  # Distributor dashboard logic
+  enable_incremental_loads: true         # Incremental vs full loads
+
+  # Tenant-specific features
+  # enable_custom_feature: true
+
+
+# Metadata
+created_at: "YYYY-MM-DD"                 # Tenant creation date
+contact_email: "admin@yourcompany.com"   # Primary contact
+region: "IN-West"                        # Geographical region
+tier: "premium"                          # premium, standard, basic
+schedule_priority: 1                     # Lower number = higher priority (1, 2, 3, ...)
+
+# Notes
+notes: "Add any tenant-specific notes here. E.g., 'Main production tenant - migrated from single-tenant system.'"
+
+
+# ==============================================================================
+# Advanced Configuration (Optional)
+# ==============================================================================
+
+# Override ETL pipeline settings
+# etl:
+#   extraction:
+#     file_types: ["csv", "excel"]
+#   transformation:
+#     validate_schema: true
+#   loading:
+#     batch_size: 100000
+
+# Override performance settings
+# performance:
+#   max_memory_mb: 8192                  # 8 GB for large datasets
+#   max_workers: 8                       # More parallelism
+
+# Override retry settings
+# retry:
+#   max_attempts: 5
+#   retry_delay: 10
+
+
+# ==============================================================================
+# Configuration Checklist
+# ==============================================================================
+# Before enabling this tenant, ensure:
+#
+# □ Replaced all {PLACEHOLDER} values
+# □ Generated UUID for tenant_id
+# □ Created StarRocks database: CREATE DATABASE {DATABASE_NAME};
+# □ Created database user with permissions
+# □ Configured .env file with secrets (DB_PASSWORD, cloud credentials)
+# □ Copied schema files from db/schemas/ to configs/tenants/{slug}/schemas/
+# □ Copied column mappings to configs/tenants/{slug}/column_mappings/
+# □ Copied seed data to configs/tenants/{slug}/seeds/
+# □ Updated tenant_registry.yaml with this tenant
+# □ Ran validation: python scripts/validate_tenant_config.py {tenant_slug}
+# □ Tested database connection
+# □ Tested cloud storage connection
+# □ Set enabled: true in config.yaml
+# ==============================================================================

@@ -1,0 +1,195 @@
+# ==============================================================================
+# Pidilite DataWiz - Tenant Configuration: Pidilite
+# ==============================================================================
+# This is the configuration for tenant1 (pidilite), the main production
+# tenant migrated from the single-tenant system.
+#
+# Tenant ID: 3607d64c-c13f-40bb-ba76-1339b1590bf5
+# Created: 2025-01-16
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Tenant Metadata
+tenant_id: "3607d64c-c13f-40bb-ba76-1339b1590bf5"
+tenant_slug: "pidilite"
+tenant_name: "Pidilite"
+enabled: true
+
+# Database Configuration
+database:
+  database_name: "pidilite_db"
+  user: "pidilite_admin"
+  # Password in .env: DB_PASSWORD
+
+  # Using defaults from configs/shared/default_config.yaml:
+  # host: 127.0.0.1
+  # port: 9030
+  # http_port: 8040
+
+
+# ==============================================================================
+# Cloud Storage: Azure Blob Storage
+# ==============================================================================
+storage_provider: "azure"
+
+storage_config:
+  # Azure Blob Storage settings
+  container_name: "synapsetaprod"
+  folder_prefix: "synapse_data/"
+
+  # Authentication: sas_token
+  auth_method: "sas_token"
+  # Required .env variables: AZURE_ACCOUNT_URL, AZURE_SAS_TOKEN
+
+  # Using defaults for:
+  # api_version: "2023-01-03"
+  # max_single_put_size: 67108864 (64 MB)
+
+
+# ==============================================================================
+# Business Constants: PostgreSQL
+# ==============================================================================
+business_constants:
+  enabled: true
+  backend: "postgres"
+
+  # PostgreSQL database details
+  database: "metadata_db"
+  table: "business_constants"
+
+  # Required .env variable: BC_3607d64c_PG_URI
+  # Format: postgresql://user:password@host:port/database
+
+
+# Data Paths
+# Inherits from configs/shared/default_config.yaml with tenant_slug interpolation
+data_paths:
+  base: "data"
+  # Paths will resolve to:
+  # - data/pidilite/historical/source_files/
+  # - data/pidilite/historical/raw_parquet/
+  # - data/pidilite/historical/cleaned_parquet/
+  # - data/pidilite/incremental/source_files/
+  # - data/pidilite/incremental/raw_parquet/
+  # - data/pidilite/incremental/cleaned_parquet/
+  # - data/pidilite/temp/
+
+
+# Logging Configuration
+logging:
+  base_path: "logs"
+  # Paths will resolve to:
+  # - logs/pidilite/scheduler/
+  # - logs/pidilite/etl/
+  # - logs/pidilite/notifications/
+  # - logs/pidilite/errors/
+
+  # Override log levels if needed
+  levels:
+    default: "INFO"
+    etl: "INFO"
+    database: "WARNING"
+
+
+# Business Rules (Tenant-Specific)
+business_rules:
+  # Date filter for FactInvoiceSecondary
+  # Only load data from April 1, 2023 onwards
+  date_filter_start: "20230401"
+
+  # Sales threshold for business constants filtering
+  sales_threshold: 10000
+
+  # Material type filter for secondary sales
+  material_type_filter: ["ZFGD"]
+
+  # Fiscal year settings (India: April to March)
+  fiscal_year:
+    start_month: 4   # April
+    end_month: 3     # March
+
+
+# Scheduler Configuration
+scheduler:
+  timezone: "Asia/Kolkata"
+
+  # Enable both job categories
+  enable_evening_jobs: true   # Dimension sync at 6 PM
+  enable_morning_jobs: true   # Fact load at 9 AM
+
+  # Using defaults from configs/shared/default_config.yaml
+
+
+# Observability Configuration
+observability:
+  service_name: "datawiz-pidilite"
+
+  # Using defaults:
+  # enabled: true
+  # tracing.enabled: true
+  # tracing.sample_rate: 1.0
+
+
+# Notification Configuration
+notifications:
+  email:
+    enabled: true
+    recipients:
+      - "rahul@southguild.tech"
+
+    # Override: notify on failure only
+    on_success: false
+    on_failure: true
+
+
+# Feature Flags
+features:
+  enable_rls: true                       # Row-level security enabled
+  enable_matviews: true                  # Materialized views enabled
+  enable_dd_logic: true                  # Distributor dashboard logic
+  enable_incremental_loads: true         # Incremental loads for fact tables
+
+
+# Metadata
+created_at: "2025-01-16"
+contact_email: "rahul@southguild.tech"
+region: "India"
+tier: "premium"
+schedule_priority: 1                     # Highest priority
+
+# Notes
+notes: |
+  Main production tenant - Pidilite.
+  Uses Azure Blob Storage + PostgreSQL for business constants.
+  This is the reference tenant for future tenant configurations.
+
+
+# ==============================================================================
+# Table-Specific Overrides (if needed)
+# ==============================================================================
+# Example: Override batch size for specific tables
+# etl:
+#   loading:
+#     table_overrides:
+#       fact_invoice_details:
+#         batch_size: 50000          # Smaller batches for large table
+
+
+# ==============================================================================
+# Configuration Notes
+# ==============================================================================
+# This configuration inherits most settings from configs/shared/default_config.yaml
+# and only overrides tenant-specific values.
+#
+# Key configurations:
+# - Cloud Storage: Azure Blob (synapsedataprod container)
+# - Business Constants: PostgreSQL (metadata_db database)
+# - Fiscal Year: April-March (Indian financial year)
+# - Date Filter: Data from 2023-04-01 onwards
+# - Material Filter: ZFGD type only for secondary sales
+#
+# Secrets stored in .env:
+# - DB_PASSWORD
+# - AZURE_STORAGE_CONNECTION_STRING
+# - BC_3607d64c_PG_URI
+# ==============================================================================

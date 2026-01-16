@@ -1,0 +1,308 @@
+# ==============================================================================
+# Pidilite DataWiz - Computed Columns Configuration
+# ==============================================================================
+# This file defines computed/derived columns for each table.
+# Computed columns are generated during transformation (not stored in source).
+#
+# Purpose:
+#   - Define composite keys (concatenated columns)
+#   - Create derived metrics (calculations)
+#   - Generate surrogate keys
+#   - Apply business logic transformations
+#
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Computed Column Types:
+#   - concatenation: Join multiple columns with separator
+#   - calculation: Apply arithmetic formula
+#   - transformation: Apply custom logic (Python expression)
+#   - lookup: Join with reference data (dimension table)
+
+# ==============================================================================
+# Fact Tables - Computed Columns
+# ==============================================================================
+
+# Fact Invoice Secondary (FIS)
+fact_invoice_secondary:
+  # Composite key for unique identification
+  fis_sg_id_cc_in:
+    type: "concatenation"
+    columns:
+      - invoice_date
+      - customer_code
+      - invoice_no
+    separator: "_"
+    description: "Composite key: invoice_date + customer_code + invoice_no"
+
+  fis_sg_cc_sk:
+    type: "concatenation"
+    columns:
+      - customer_code
+      - sales_office_code
+    separator: "_"
+    description: "Customer + Sales Office composite key"
+
+  # Derived metrics
+  total_sales_amount:
+    type: "calculation"
+    formula: "sales_qty * rate"
+    description: "Total sales = quantity × rate"
+
+  fiscal_year:
+    type: "transformation"
+    logic: |
+      import polars as pl
+      # Fiscal year: Apr-Mar (if month >= 4, use current year, else use previous year)
+      pl.when(pl.col("invoice_date").str.slice(4, 2).cast(pl.Int32) >= 4)
+        .then(pl.col("invoice_date").str.slice(0, 4))
+        .otherwise(pl.col("invoice_date").str.slice(0, 4).cast(pl.Int32) - 1)
+    description: "Fiscal year (Apr-Mar)"
+
+  fiscal_quarter:
+    type: "transformation"
+    logic: |
+      import polars as pl
+      # Q1: Apr-Jun (04-06), Q2: Jul-Sep (07-09), Q3: Oct-Dec (10-12), Q4: Jan-Mar (01-03)
+      month = pl.col("invoice_date").str.slice(4, 2).cast(pl.Int32)
+      pl.when(month.is_in([4, 5, 6])).then(pl.lit("Q1"))
+        .when(month.is_in([7, 8, 9])).then(pl.lit("Q2"))
+        .when(month.is_in([10, 11, 12])).then(pl.lit("Q3"))
+        .otherwise(pl.lit("Q4"))
+    description: "Fiscal quarter (Q1-Q4)"
+
+
+# Fact Invoice Details (FID)
+fact_invoice_details:
+  # Composite key
+  fid_sg_id_cc_in_item:
+    type: "concatenation"
+    columns:
+      - invoice_date
+      - customer_code
+      - invoice_no
+      - item_no
+    separator: "_"
+    description: "Composite key: invoice_date + customer_code + invoice_no + item_no"
+
+  # Derived metrics
+  net_amount:
+    type: "calculation"
+    formula: "gross_amount - discount_amount + tax_amount"
+    description: "Net amount after discounts and taxes"
+
+  discount_percentage:
+    type: "calculation"
+    formula: "(discount_amount / gross_amount) * 100 if gross_amount > 0 else 0"
+    description: "Discount percentage"
+
+  unit_price:
+    type: "calculation"
+    formula: "gross_amount / quantity if quantity > 0 else 0"
+    description: "Unit price per item"
+
+
+# ==============================================================================
+# Dimension Tables - Computed Columns
+# ==============================================================================
+
+# Dimension Material Mapping
+dim_material_mapping:
+  # Material hierarchy key
+  material_hierarchy_key:
+    type: "concatenation"
+    columns:
+      - brand_code
+      - product_group_code
+      - division_code
+    separator: "|"
+    description: "Material hierarchy: brand|product_group|division"
+
+  # Material classification
+  material_category:
+    type: "transformation"
+    logic: |
+      import polars as pl
+      # Classify based on material_type
+      pl.when(pl.col("material_type") == "ZFGD").then(pl.lit("Finished Goods"))
+        .when(pl.col("material_type") == "ZRAW").then(pl.lit("Raw Materials"))
+        .when(pl.col("material_type") == "ZPAK").then(pl.lit("Packaging"))
+        .otherwise(pl.lit("Other"))
+    description: "Material category based on type"
+
+
+# Dimension Sales Group
+dim_sales_group:
+  # Sales hierarchy key
+  sales_hierarchy_key:
+    type: "concatenation"
+    columns:
+      - zone_code
+      - region_code
+      - territory_code
+    separator: "|"
+    description: "Sales hierarchy: zone|region|territory"
+
+  # Full hierarchy path
+  sales_hierarchy_path:
+    type: "concatenation"
+    columns:
+      - zone_name
+      - region_name
+      - territory_name
+    separator: " > "
+    description: "Full hierarchy: Zone > Region > Territory"
+
+
+# Dimension Customer
+dim_customer:
+  # Customer full name
+  customer_full_name:
+    type: "concatenation"
+    columns:
+      - customer_code
+      - customer_name
+    separator: " - "
+    description: "Customer code - Customer name"
+
+  # Customer segment
+  customer_segment:
+    type: "transformation"
+    logic: |
+      import polars as pl
+      # Segment based on customer_type
+      pl.when(pl.col("customer_type") == "Z001").then(pl.lit("Distributor"))
+        .when(pl.col("customer_type") == "Z002").then(pl.lit("Dealer"))
+        .when(pl.col("customer_type") == "Z003").then(pl.lit("Retailer"))
+        .otherwise(pl.lit("Other"))
+    description: "Customer segment classification"
+
+
+# ==============================================================================
+# Bridge Tables - Computed Columns (if needed)
+# ==============================================================================
+
+# Example: Bridge table for many-to-many relationships
+# bridge_customer_territory:
+#   relationship_key:
+#     type: "concatenation"
+#     columns:
+#       - customer_code
+#       - territory_code
+#     separator: "_"
+#     description: "Customer-Territory relationship key"
+
+
+# ==============================================================================
+# Materialized View Source - Computed Columns
+# ==============================================================================
+
+# Secondary Sales View (if computed columns needed for view)
+# secondary_sales_view:
+#   ytd_sales:
+#     type: "calculation"
+#     formula: "SUM(sales_qty) OVER (PARTITION BY fiscal_year ORDER BY invoice_date)"
+#     description: "Year-to-date sales"
+
+
+# ==============================================================================
+# Global Computed Column Settings
+# ==============================================================================
+global_settings:
+  # Separator for concatenation (override per column if needed)
+  default_separator: "_"
+
+  # Null handling
+  null_handling:
+    concatenation: "skip"                # skip, empty_string, null
+    calculation: "null"                  # null, zero, error
+
+  # Data type inference
+  auto_infer_types: true                 # Infer data types from formula
+
+  # Performance settings
+  vectorized: true                       # Use vectorized operations (Polars)
+  parallel: true                         # Parallelize computations
+
+
+# ==============================================================================
+# Validation Rules for Computed Columns
+# ==============================================================================
+validation:
+  # Ensure source columns exist
+  validate_source_columns: true          # Fail if source column missing
+
+  # Check for circular dependencies
+  check_circular_deps: true              # Detect A → B → A dependencies
+
+  # Data type compatibility
+  validate_types: true                   # Ensure compatible types in formulas
+
+
+# ==============================================================================
+# Usage Notes
+# ==============================================================================
+# 1. Column naming:
+#    - Use snake_case for consistency
+#    - Prefix with table abbreviation (e.g., fis_, fid_)
+#    - Suffix with _key for composite keys
+#
+# 2. Concatenation:
+#    - Specify columns in order
+#    - Choose meaningful separator (_ for keys, | for hierarchy)
+#    - Null handling: "skip" removes null values from concatenation
+#
+# 3. Calculation:
+#    - Use Python/Polars expressions
+#    - Handle division by zero (use conditional logic)
+#    - Wrap in try-except for error handling
+#
+# 4. Transformation:
+#    - Use Polars expressions for performance
+#    - Import required libraries in logic block
+#    - Test transformations with sample data first
+#
+# 5. Performance tips:
+#    - Use vectorized operations (avoid row-by-row loops)
+#    - Compute expensive columns once, reuse results
+#    - Consider materialized views for complex computations
+#
+# 6. Testing:
+#    - Test with null values
+#    - Test with edge cases (zero, negative, very large numbers)
+#    - Validate output data types
+#    - Check for overflow/underflow
+# ==============================================================================
+
+
+# ==============================================================================
+# Examples
+# ==============================================================================
+
+# Example 1: Simple concatenation
+# customer_material_key:
+#   type: "concatenation"
+#   columns: [customer_code, material_code]
+#   separator: "_"
+
+# Example 2: Date-based calculation
+# days_since_invoice:
+#   type: "calculation"
+#   formula: "(CURRENT_DATE - invoice_date).days"
+
+# Example 3: Conditional transformation
+# price_category:
+#   type: "transformation"
+#   logic: |
+#     import polars as pl
+#     pl.when(pl.col("unit_price") > 1000).then(pl.lit("Premium"))
+#       .when(pl.col("unit_price") > 500).then(pl.lit("Standard"))
+#       .otherwise(pl.lit("Budget"))
+
+# Example 4: Complex calculation
+# margin_percentage:
+#   type: "calculation"
+#   formula: |
+#     ((sales_amount - cost_amount) / sales_amount * 100)
+#     if sales_amount > 0 else 0
+# ==============================================================================

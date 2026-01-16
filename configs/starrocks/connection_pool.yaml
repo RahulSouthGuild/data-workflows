@@ -1,0 +1,284 @@
+# ==============================================================================
+# Pidilite DataWiz - StarRocks Connection Pool Configuration
+# ==============================================================================
+# This file configures database connection pooling for StarRocks.
+# Uses SQLAlchemy QueuePool for efficient connection management.
+#
+# Purpose:
+#   - Configure connection pool size and behavior
+#   - Set connection timeouts and retries
+#   - Define health check settings
+#   - Manage connection lifecycle
+#
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Connection Pool Settings
+pool:
+  # Pool size configuration
+  size:
+    min: 5                               # Minimum connections to maintain
+    max: 10                              # Maximum pool size
+    max_overflow: 20                     # Additional connections beyond pool_size
+    total_max: 30                        # Absolute max (pool_size + max_overflow)
+
+  # Connection timeout settings
+  timeout:
+    checkout: 30                         # Wait for connection from pool (seconds)
+    connect: 10                          # Connection establishment timeout
+    query: 300                           # Query execution timeout (5 min)
+    stream_load: 600                     # Stream Load timeout (10 min)
+
+  # Connection lifecycle
+  lifecycle:
+    recycle: 3600                        # Recycle connections after 1 hour
+    pre_ping: true                       # Test connection before use
+    echo: false                          # Don't log SQL statements
+    echo_pool: false                     # Don't log pool events (set true for debug)
+
+  # Connection retry settings
+  retry:
+    max_attempts: 3                      # Max connection retry attempts
+    backoff_factor: 2                    # Exponential backoff (2, 4, 8 seconds)
+    retry_on_timeout: true               # Retry on connection timeout
+    retry_on_operational_error: true     # Retry on operational errors
+
+
+# MySQL Protocol Configuration (StarRocks FE)
+# StarRocks uses MySQL protocol for queries and DDL
+mysql_protocol:
+  port: 9030                             # Default MySQL protocol port
+  charset: "utf8mb4"                     # Character encoding
+  use_unicode: true                      # Use unicode strings
+
+  # Connection parameters
+  connect_params:
+    connect_timeout: 10
+    read_timeout: 300                    # 5 minutes for long queries
+    write_timeout: 300
+    autocommit: true                     # Auto-commit transactions
+
+  # SSL/TLS settings
+  ssl:
+    enabled: false                       # Enable SSL (set true for production)
+    verify_mode: "CERT_REQUIRED"         # CERT_NONE, CERT_OPTIONAL, CERT_REQUIRED
+    ca_cert: null                        # Path to CA certificate
+    client_cert: null                    # Path to client certificate
+    client_key: null                     # Path to client key
+
+
+# HTTP Stream Load Configuration
+# StarRocks Stream Load uses HTTP for bulk data ingestion
+stream_load:
+  http_port: 8040                        # Default HTTP port
+
+  # Stream Load parameters
+  parameters:
+    format: "parquet"                    # csv, json, parquet
+    timeout: 600                         # 10 minutes
+    max_filter_ratio: 0.0                # Reject batch if any row fails (0.0 = strict)
+    strict_mode: true                    # Enable strict mode
+    timezone: "Asia/Kolkata"             # IST timezone
+
+    # Parquet-specific settings
+    parquet:
+      compression: "uncompressed"        # Parquet already compressed
+      use_vectorized_load: true          # Use vectorized loading (faster)
+
+    # CSV-specific settings (if needed)
+    csv:
+      column_separator: ","              # Default delimiter
+      row_delimiter: "\n"
+      skip_header: 0                     # Skip N header rows
+      trim_space: true                   # Trim whitespace
+      enclose: "\""                      # Enclosure character
+      escape: "\\"                       # Escape character
+
+  # HTTP connection settings
+  http:
+    max_connections: 10                  # Max concurrent HTTP connections
+    keep_alive: true                     # Use HTTP keep-alive
+    pool_connections: 5                  # Connection pool for HTTP
+    pool_maxsize: 10                     # Max pool size
+    connect_timeout: 10                  # HTTP connection timeout
+    read_timeout: 600                    # HTTP read timeout (10 min)
+
+  # Retry settings for Stream Load
+  retry:
+    max_attempts: 3                      # Retry failed loads
+    backoff_factor: 5                    # Wait 5, 10, 15 seconds
+    retry_on_timeout: true
+    retry_on_server_error: true          # Retry on 5xx errors
+
+
+# Health Check Configuration
+health_check:
+  enabled: true                          # Enable health checks
+  interval: 300                          # Check every 5 minutes
+  timeout: 10                            # Health check timeout
+
+  # Queries to verify connection
+  checks:
+    - name: "basic_connectivity"
+      query: "SELECT 1"
+      expected_result: 1
+      critical: true                     # Fail if this check fails
+
+    - name: "database_access"
+      query: "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()"
+      expected_result: "> 0"
+      critical: true
+
+    - name: "load_balancer"
+      query: "SHOW FRONTENDS"
+      expected_result: "contains Alive"
+      critical: false                    # Warning if this fails
+
+
+# Load Balancing (if using multiple FE nodes)
+load_balancing:
+  enabled: false                         # Enable if multiple FE nodes
+  strategy: "round_robin"                # round_robin, random, least_connections
+
+  # Frontend nodes (if load balancing enabled)
+  frontend_nodes:
+    - host: "localhost"
+      port: 9030
+      weight: 1                          # Higher weight = more connections
+
+  # Health check for FE nodes
+  node_health_check:
+    enabled: true
+    interval: 60                         # Check every minute
+    timeout: 5
+    failure_threshold: 3                 # Mark unhealthy after 3 failures
+    success_threshold: 2                 # Mark healthy after 2 successes
+
+
+# Connection Event Handlers
+event_handlers:
+  # On connection checkout (before use)
+  on_checkout:
+    validate_connection: true            # Run health check
+    log_event: false                     # Don't log every checkout (noisy)
+
+  # On connection checkin (after use)
+  on_checkin:
+    reset_connection: false              # Don't reset (autocommit=true)
+    log_event: false
+
+  # On connection connect (new connection)
+  on_connect:
+    set_session_variables: true          # Set session variables
+    log_event: true                      # Log new connections
+
+    # Session variables to set on new connection
+    session_variables:
+      query_timeout: 300                 # 5 minutes
+      load_mem_limit: 4294967296         # 4 GB per query
+      parallel_fragment_exec_instance_num: 8  # Parallelism
+
+
+# Performance Monitoring
+monitoring:
+  # Connection pool metrics
+  pool_metrics:
+    enabled: true
+    collect_interval: 60                 # Collect every minute
+
+    # Metrics to track
+    metrics:
+      - pool_size                        # Current pool size
+      - checked_out_connections          # Connections in use
+      - overflow_connections             # Overflow connections
+      - queue_size                       # Waiting for connection
+      - average_checkout_time            # Avg time to get connection
+      - connection_errors                # Failed connections
+
+  # Query performance metrics
+  query_metrics:
+    enabled: true
+    slow_query_threshold: 10             # Log queries > 10 seconds
+    log_slow_queries: true
+
+  # Stream Load metrics
+  load_metrics:
+    enabled: true
+    track_load_time: true
+    track_row_count: true
+    track_error_rate: true
+
+
+# Disaster Recovery
+disaster_recovery:
+  # Connection failure handling
+  on_connection_failure:
+    action: "retry_then_fail"            # retry_then_fail, fail_immediately, use_backup
+
+    # Backup FE node (if primary fails)
+    backup_node:
+      enabled: false                     # Enable if using backup FE
+      host: null
+      port: 9030
+
+  # Pool exhaustion handling
+  on_pool_exhaustion:
+    action: "wait_with_timeout"          # wait_with_timeout, fail_immediately
+    wait_timeout: 30                     # Wait up to 30 seconds
+
+  # Network timeout handling
+  on_network_timeout:
+    action: "retry"                      # retry, fail
+    max_retries: 3
+
+
+# Development vs Production Settings
+environments:
+  # Development settings
+  development:
+    pool_size: 2
+    max_overflow: 5
+    echo: true                           # Log SQL statements
+    echo_pool: true                      # Log pool events
+    slow_query_threshold: 5              # Log queries > 5 seconds
+
+  # Production settings
+  production:
+    pool_size: 10
+    max_overflow: 20
+    echo: false
+    echo_pool: false
+    slow_query_threshold: 10
+    ssl_enabled: true                    # Use SSL in production
+
+
+# ==============================================================================
+# Usage Notes
+# ==============================================================================
+# 1. Connection URL format:
+#    mysql+pymysql://{user}:{password}@{host}:{port}/{database}
+#
+# 2. Pool sizing guidelines:
+#    - pool_size: Number of concurrent ETL jobs
+#    - max_overflow: 2x pool_size for spikes
+#    - total_max = pool_size + max_overflow
+#
+# 3. Timeout tuning:
+#    - connect_timeout: Keep low (10s) to fail fast
+#    - query_timeout: Based on longest expected query
+#    - stream_load_timeout: Based on largest batch size
+#
+# 4. Health checks:
+#    - pre_ping: Validates connection before each use (slight overhead)
+#    - recycle: Prevents stale connections (set to < server timeout)
+#
+# 5. Stream Load optimization:
+#    - Use parquet format for best performance
+#    - max_filter_ratio: 0.0 for data quality (strict)
+#    - timeout: Based on data volume (10 min for ~10M rows)
+#
+# 6. Monitoring:
+#    - Enable pool_metrics to track connection usage
+#    - Enable slow_query logging to identify bottlenecks
+#    - Use echo_pool=true only for debugging (very noisy)
+# ==============================================================================

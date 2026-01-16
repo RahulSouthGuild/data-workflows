@@ -1,0 +1,294 @@
+# ==============================================================================
+# Pidilite DataWiz - Multi-Tenant Registry
+# ==============================================================================
+# This is the SINGLE SOURCE OF TRUTH for all tenant configurations.
+#
+# Purpose:
+#   - Lists all tenants (enabled and disabled)
+#   - Controls which tenants are processed by job runner
+#   - Defines tenant metadata and cloud provider configurations
+#
+# Tenant ID Format: UUID v4 for uniqueness and security
+#
+# Supported Cloud Providers:
+#   - azure: Azure Blob Storage
+#   - aws: AWS S3
+#   - gcp: Google Cloud Storage
+#   - minio: MinIO (on-premise S3-compatible)
+#   - local: Local filesystem
+#
+# Supported Business Constants Backends:
+#   - postgres: PostgreSQL
+#   - mysql: MySQL/MariaDB
+#   - mongodb: MongoDB
+#   - starrocks: StarRocks itself
+#
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Tenant Definitions
+tenants:
+  # ============================================================================
+  # TENANT 1: Pidilite (Current Production System)
+  # ============================================================================
+  - tenant_id: "3607d64c-c13f-40bb-ba76-1339b1590bf5"
+    tenant_slug: "pidilite"          # Human-readable identifier
+    tenant_name: "Pidilite"
+
+    # Status
+    enabled: true                           # Set to false to disable processing
+
+    # Database Configuration
+    database_name: "pidilite_db"
+    database_user: "pidilite_admin"
+    database_type: "starrocks"             # starrocks, clickhouse, postgres
+
+    # Cloud Storage Provider Configuration
+    storage_provider: "azure"               # azure, aws, gcp, minio, local
+    storage_config:
+      # Azure-specific settings
+      container_name: "synapsetaprod"
+      folder_prefix: "synapse_data/"
+
+      # Authentication method: connection_string, sas_token, or service_principal
+      auth_method: "sas_token"
+
+      # For other providers, these fields will be different:
+      # AWS: bucket_name, region, auth_method (iam_role, access_key)
+      # GCP: bucket_name, project_id, auth_method (service_account, workload_identity)
+      # MinIO: endpoint, bucket_name, auth_method (access_key)
+      # Local: base_path
+
+    # Business Constants Storage
+    business_constants:
+      enabled: true
+      backend: "postgres"                   # postgres, mysql, mongodb, starrocks
+      # Connection details in .env file with tenant UUID prefix:
+      #   - postgres: BC_3607d64c_PG_URI
+      #   - mysql: BC_3607d64c_MYSQL_URI
+      #   - mongodb: BC_3607d64c_MONGO_URI
+      #   - starrocks: uses main database connection
+
+    # Scheduling
+    schedule_priority: 1                    # Lower number = higher priority
+    tier: "premium"                         # premium, standard, basic
+
+    # Metadata
+    created_at: "2025-01-16"
+    contact_email: "rahul@southguild.tech"
+    region: "India"                       # Geographical region
+
+    # Feature Flags
+    features:
+      enable_rls: true                      # Row-level security
+      enable_matviews: true                 # Materialized views
+      enable_dd_logic: true                 # Distributor dashboard logic
+      enable_incremental_loads: true        # Incremental vs full loads
+
+    # Notes
+    notes: "Main production tenant - Pidilite. Uses Azure Blob + PostgreSQL for business constants."
+
+  # ============================================================================
+  # TENANT 2: Uthra Global (Future Onboarding)
+  # ============================================================================
+  - tenant_id: "552d4da3-d7f5-4204-b324-d8574754b0fe"
+    tenant_slug: "uthra-global"
+    tenant_name: "Uthra Global"
+
+    # Status
+    enabled: false                          # Not yet onboarded
+
+    # Database Configuration
+    database_name: "datawiz_uthra_global"
+    database_user: "uthra_global_admin"
+    database_type: "starrocks"
+
+    # Cloud Storage Provider Configuration
+    storage_provider: "aws"                 # Using AWS S3
+    storage_config:
+      # AWS S3-specific settings
+      bucket_name: "uthra-global-data"
+      region: "ap-south-1"                  # Mumbai region
+      folder_prefix: "raw_data/"
+
+      # Authentication: iam_role (recommended) or access_key
+      auth_method: "iam_role"               # More secure than access keys
+      # If using access_key: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env
+
+    # Business Constants Storage (Using StarRocks itself)
+    business_constants:
+      enabled: true
+      backend: "starrocks"                  # Store in same StarRocks DB
+      table_name: "business_constants"      # Table name for constants
+
+    # Scheduling
+    schedule_priority: 2
+    tier: "standard"
+
+    # Metadata
+    created_at: "2025-01-20"
+    contact_email: "admin@uthraglobal.com"
+    region: "India"
+
+    # Feature Flags
+    features:
+      enable_rls: true
+      enable_matviews: true
+      enable_dd_logic: false                # Not needed for this tenant
+      enable_incremental_loads: true
+
+    # Notes
+    notes: "Planned for future onboarding. Uses AWS S3 + StarRocks for business constants."
+
+
+
+
+# ==============================================================================
+# Global Configuration
+# ==============================================================================
+global_config:
+  # Execution Settings
+  max_concurrent_tenants: 1                 # Sequential execution (1 tenant at a time)
+  tenant_timeout: 7200                      # Max time per tenant in seconds (2 hours)
+  fail_fast: false                          # Continue to next tenant on failure
+
+  # Infrastructure
+  shared_starrocks_cluster: true            # All tenants share same StarRocks cluster
+
+  # Retry Settings
+  max_retries: 3                            # Global retry limit
+  retry_delay: 5                            # Delay between retries (seconds)
+
+  # Logging
+  log_level: "INFO"                         # DEBUG, INFO, WARNING, ERROR
+  log_retention_days: 30                    # Keep logs for 30 days
+
+  # Monitoring
+  enable_observability: true                # Enable OpenTelemetry tracing
+  health_check_interval: 300                # Health check every 5 minutes
+
+  # Cloud Provider Support
+  supported_storage_providers:
+    - azure                                 # Azure Blob Storage
+    - aws                                   # AWS S3
+    - gcp                                   # Google Cloud Storage
+    - minio                                 # MinIO (S3-compatible)
+    - local                                 # Local filesystem
+
+  # Business Constants Backend Support
+  supported_business_constants_backends:
+    - postgres                              # PostgreSQL
+    - mysql                                 # MySQL/MariaDB
+    - mongodb                               # MongoDB
+    - starrocks                             # StarRocks itself
+
+
+# ==============================================================================
+# Cloud Provider Templates (for reference)
+# ==============================================================================
+# Copy these templates when creating new tenants with different providers
+
+storage_provider_templates:
+  # Azure Blob Storage
+  azure:
+    container_name: "CONTAINER_NAME"
+    folder_prefix: "PATH/"
+    auth_method: "connection_string"        # or sas_token, service_principal
+    # Required .env variables:
+    #   AZURE_STORAGE_CONNECTION_STRING (if auth_method: connection_string)
+    #   AZURE_SAS_TOKEN (if auth_method: sas_token)
+    #   AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET (if service_principal)
+
+  # AWS S3
+  aws:
+    bucket_name: "BUCKET_NAME"
+    region: "REGION"                        # e.g., us-east-1, ap-south-1
+    folder_prefix: "PATH/"
+    auth_method: "iam_role"                 # or access_key
+    # Required .env variables (if auth_method: access_key):
+    #   AWS_ACCESS_KEY_ID
+    #   AWS_SECRET_ACCESS_KEY
+
+  # Google Cloud Storage
+  gcp:
+    bucket_name: "BUCKET_NAME"
+    project_id: "PROJECT_ID"
+    folder_prefix: "PATH/"
+    auth_method: "service_account"          # or workload_identity
+    # Required .env variables:
+    #   GCP_SERVICE_ACCOUNT_JSON (JSON key file content)
+
+  # MinIO (Self-hosted S3-compatible)
+  minio:
+    endpoint: "https://minio.example.com"
+    bucket_name: "BUCKET_NAME"
+    folder_prefix: "PATH/"
+    auth_method: "access_key"
+    # Required .env variables:
+    #   MINIO_ACCESS_KEY
+    #   MINIO_SECRET_KEY
+
+  # Local Filesystem
+  local:
+    base_path: "/data/tenant_name"
+    # No authentication required
+
+
+business_constants_backend_templates:
+  # PostgreSQL
+  postgres:
+    database: "DATABASE_NAME"
+    table: "business_constants"
+    # Required .env variable: BC_{first_8_uuid}_PG_URI
+    # Format: postgresql://user:password@host:port/database
+
+  # MySQL
+  mysql:
+    database: "DATABASE_NAME"
+    table: "business_constants"
+    # Required .env variable: BC_{first_8_uuid}_MYSQL_URI
+    # Format: mysql://user:password@host:port/database
+
+  # MongoDB
+  mongodb:
+    database: "DATABASE_NAME"
+    collection: "business_constants"
+    # Required .env variable: BC_{first_8_uuid}_MONGO_URI
+    # Format: mongodb://user:password@host:port/database
+
+  # StarRocks (use main database)
+  starrocks:
+    table_name: "business_constants"
+    # Uses main database connection
+
+
+# ==============================================================================
+# Maintenance & Operational Notes
+# ==============================================================================
+# To onboard a new tenant:
+#   1. Generate new UUID: python -c "import uuid; print(uuid.uuid4())"
+#   2. Add entry above with enabled: false and the new UUID
+#   3. Choose storage_provider (azure, aws, gcp, minio, local)
+#   4. Choose business_constants backend (postgres, mysql, mongodb, starrocks)
+#   5. Copy configs/tenants/_template to configs/tenants/{tenant_slug}
+#   6. Edit config.yaml with provider-specific settings
+#   7. Add secrets to .env based on chosen providers (use UUID prefix for env vars)
+#   8. Create database: CREATE DATABASE datawiz_{tenant_slug};
+#   9. Run: python db/create_tables.py --tenant {uuid}
+#   10. Set enabled: true in this file
+#
+# UUID Usage:
+#   - tenant_id: Full UUID for uniqueness
+#   - tenant_slug: Human-readable name for directories/databases
+#   - .env variables: Use first 8 characters of UUID as prefix
+#
+# To change cloud provider for a tenant:
+#   - Update storage_provider and storage_config
+#   - Update .env with new provider credentials
+#   - Test connection before enabling
+#
+# To change business constants backend:
+#   - Update business_constants.backend
+#   - Add appropriate .env variable with UUID prefix
+#   - Migrate existing constants if needed
+# ==============================================================================

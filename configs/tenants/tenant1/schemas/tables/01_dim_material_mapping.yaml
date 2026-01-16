@@ -1,0 +1,14 @@
+# dim_material_mapping - Schema Definition
+# Converted from 01_DimMaterialMapping.py
+# Type: TABLE
+# Order: 1
+
+name: dim_material_mapping
+type: TABLE
+order: 1
+sql: "CREATE TABLE dim_material_mapping (\n    brand VARCHAR(118),\n    final_classification VARCHAR(118),\n    material_code VARCHAR(118),\n    parent_division_code VARCHAR(118),\n    parent_division_name VARCHAR(118),\n    product_group_1_description VARCHAR(140),\n    product_group_2_description VARCHAR(140),\n    product_group_3_description VARCHAR(140),\n    vertical VARCHAR(50),\n    material_code_sg_key VARCHAR(118)\n)\nDISTRIBUTED BY HASH(material_code) BUCKETS 10\nPROPERTIES (\n    \"replication_num\" = \"1\"\n);"
+comments:
+  table: Stores the mapping of material codes to their final classifications.
+  columns:
+    material_code: Unique code for the material. This field identifies each record distinctly.
+    final_classification: Final classification of the material.

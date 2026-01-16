@@ -1,0 +1,626 @@
+# Column mapping for fact_invoice_details
+# Auto-converted from 07_FactInvoiceDetails.json
+
+table_name: fact_invoice_details
+description: fact_invoice_details mapping (Parquet → Database) - Updated for StarRocks
+  with snake_case
+columns:
+  activeflag:
+    data_type: VARCHAR(1)
+    db_column: active_flag
+    max_string_length: 1
+  actualinvoicedquantity:
+    data_type: DECIMAL(12, 2)
+    db_column: actual_invoiced_quantity
+  basetransferflag:
+    data_type: VARCHAR(1)
+    db_column: base_transfer_flag
+    max_string_length: 1
+  basetransferpercantage:
+    data_type: DECIMAL(5, 2)
+    db_column: base_transfer_percentage
+  baseuom:
+    data_type: VARCHAR(8)
+    db_column: base_uom
+    max_string_length: 8
+  billingdate:
+    data_type: INTEGER
+    db_column: billing_date
+  billingquantityinstockkeepingunit:
+    data_type: DECIMAL(12, 2)
+    db_column: billing_quantity_in_stock_keeping_unit
+  boppcolor:
+    data_type: VARCHAR(15)
+    db_column: bopp_color
+    max_string_length: 15
+  businessareacode:
+    data_type: SMALLINT
+    db_column: business_area_code
+  cancelledinvoicereferecnenumber:
+    data_type: BIGINT
+    db_column: cancelled_invoice_reference_number
+  cgst:
+    data_type: DECIMAL(12, 2)
+    db_column: cgst
+  claimno:
+    data_type: VARCHAR(50)
+    db_column: claim_no
+    max_string_length: 50
+  cnvalue:
+    data_type: DECIMAL(10, 2)
+    db_column: cn_value
+  cnvaluefc:
+    data_type: DECIMAL(10, 2)
+    db_column: cn_value_fc
+  companycode:
+    data_type: SMALLINT
+    db_column: company_code
+  createddate:
+    data_type: INTEGER
+    db_column: created_date
+  creditquantity:
+    data_type: DECIMAL(10, 2)
+    db_column: credit_quantity
+  creditvalue:
+    data_type: DECIMAL(10, 2)
+    db_column: credit_value
+  customercode:
+    data_type: VARCHAR(12)
+    db_column: customer_code
+    max_string_length: 12
+  customercodeorg:
+    data_type: INTEGER
+    db_column: customer_code_org
+  defectcode:
+    data_type: VARCHAR(5)
+    db_column: defect_code
+    max_string_length: 5
+  departmentcodehistory:
+    data_type: DECIMAL(8, 4)
+    db_column: department_code_history
+  departmentcodeorg:
+    data_type: INTEGER
+    db_column: department_code_org
+  discountvalue:
+    data_type: DECIMAL(12, 2)
+    db_column: discount_value
+  discountvaluefc:
+    data_type: DECIMAL(12, 2)
+    db_column: discount_value_fc
+  distributionchannelcode:
+    data_type: SMALLINT
+    db_column: distribution_channel_code
+  divisioncode:
+    data_type: SMALLINT
+    db_column: division_code
+  doccurrency:
+    data_type: VARCHAR(5)
+    db_column: doc_currency
+    max_string_length: 5
+  documentdate:
+    data_type: INTEGER
+    db_column: document_date
+  documenttypecode:
+    data_type: VARCHAR(5)
+    db_column: document_type_code
+    max_string_length: 5
+  exchangerate:
+    data_type: DECIMAL(5, 2)
+    db_column: exchange_rate
+  finalapprovaldate:
+    data_type: INTEGER
+    db_column: final_approval_date
+  frddate:
+    data_type: INTEGER
+    db_column: frd_date
+  freightcharges:
+    data_type: DECIMAL(12, 2)
+    db_column: freight_charges
+  glacccode:
+    data_type: DECIMAL(12, 2)
+    db_column: gl_ac_code
+  gradecode:
+    data_type: VARCHAR(10)
+    db_column: grade_code
+    max_string_length: 10
+  grossvalue:
+    data_type: DECIMAL(12, 3)
+    db_column: gross_value
+  grossvaluefc:
+    data_type: DECIMAL(12, 3)
+    db_column: gross_value_fc
+  headertext:
+    data_type: VARCHAR(10)
+    db_column: header_text
+    max_string_length: 10
+  igst:
+    data_type: DECIMAL(12, 2)
+    db_column: igst
+  invoivelistingno:
+    data_type: VARCHAR(10)
+    db_column: invoice_listing_no
+    max_string_length: 10
+  invoiceno:
+    data_type: VARCHAR(15)
+    db_column: invoice_no
+    max_string_length: 15
+  invoicetype:
+    data_type: VARCHAR(6)
+    db_column: invoice_type
+    max_string_length: 6
+  invoicetypedescription:
+    data_type: VARCHAR(40)
+    db_column: invoice_type_description
+    max_string_length: 40
+  itemnumber:
+    data_type: DECIMAL(8, 2)
+    db_column: item_number
+  ja1x:
+    data_type: DECIMAL(10, 2)
+    db_column: ja1x
+  jcep:
+    data_type: DECIMAL(10, 2)
+    db_column: jcep
+  jexp:
+    data_type: DECIMAL(10, 2)
+    db_column: jexp
+  jtc1:
+    data_type: DECIMAL(10, 2)
+    db_column: jtc1
+  lrdate:
+    data_type: INTEGER
+    db_column: lr_date
+  lrnumber:
+    data_type: VARCHAR(20)
+    db_column: lr_number
+    max_string_length: 20
+  manufacturingplantcode:
+    data_type: SMALLINT
+    db_column: manufacturing_plant_code
+  materialcode:
+    data_type: VARCHAR(20)
+    db_column: material_code
+    max_string_length: 20
+  materialcodeorg:
+    data_type: VARCHAR(10)
+    db_column: material_code_org
+    max_string_length: 10
+  materialdivision:
+    data_type: SMALLINT
+    db_column: material_division
+  mfgdate:
+    data_type: INTEGER
+    db_column: mfg_date
+  mistype:
+    data_type: VARCHAR(5)
+    db_column: mis_type
+    max_string_length: 5
+  netdate:
+    data_type: INTEGER
+    db_column: net_date
+  netvalue:
+    data_type: DECIMAL(10, 2)
+    db_column: net_value
+  netvaluefc:
+    data_type: DECIMAL(10, 2)
+    db_column: net_value_fc
+  netweight:
+    data_type: DECIMAL(15, 2)
+    db_column: net_weight
+  netweightinkg:
+    data_type: DECIMAL(15, 2)
+    db_column: net_weight_in_kg
+  orderlineno:
+    data_type: SMALLINT
+    db_column: order_line_no
+  orderno:
+    data_type: VARCHAR(20)
+    db_column: order_no
+    max_string_length: 20
+  plantcode:
+    data_type: SMALLINT
+    db_column: plant_code
+  plantcodehistory:
+    data_type: VARCHAR(10)
+    db_column: plant_code_history
+    max_string_length: 10
+  postingdate:
+    data_type: INTEGER
+    db_column: posting_date
+  postingdatedf:
+    data_type: VARCHAR(12)
+    db_column: posting_date_df
+    max_string_length: 12
+  price:
+    data_type: DECIMAL(20, 2)
+    db_column: price
+  productcode:
+    data_type: VARCHAR(10)
+    db_column: product_code
+    max_string_length: 10
+  quantityineach:
+    data_type: DECIMAL(10, 2)
+    db_column: quantity_in_each
+  rate:
+    data_type: DECIMAL(10, 2)
+    db_column: rate
+  reasoncode:
+    data_type: VARCHAR(20)
+    db_column: reason_code
+    max_string_length: 20
+  reportingunit:
+    data_type: DECIMAL(10, 2)
+    db_column: reporting_unit
+  revisednetvaluemsgvg:
+    data_type: DECIMAL(12, 3)
+    db_column: revised_net_value_msgvg
+  revisednetvaluemvg:
+    data_type: DECIMAL(15, 3)
+    db_column: revised_net_value_mvg
+  rltday:
+    data_type: SMALLINT
+    db_column: rlt_day
+  salesgroupcode:
+    data_type: SMALLINT
+    db_column: sales_group_code
+  salesorgcode:
+    data_type: SMALLINT
+    db_column: sales_org_code
+  salestransfercrno:
+    data_type: VARCHAR(15)
+    db_column: sales_transfer_cr_no
+    max_string_length: 15
+  salestransferupdateddate:
+    data_type: INTEGER
+    db_column: sales_transfer_updated_date
+  salesunit:
+    data_type: VARCHAR(5)
+    db_column: sales_unit
+    max_string_length: 5
+  salesvalue:
+    data_type: DECIMAL(14, 2)
+    db_column: sales_value
+  sgst:
+    data_type: DECIMAL(10, 2)
+    db_column: sgst
+  shiptoparty:
+    data_type: DECIMAL(10, 2)
+    db_column: ship_to_party
+  storagelocation:
+    data_type: VARCHAR(6)
+    db_column: storage_location
+    max_string_length: 6
+  subdefectcode:
+    data_type: VARCHAR(6)
+    db_column: sub_defect_code
+    max_string_length: 6
+  subreasoncode:
+    data_type: VARCHAR(20)
+    db_column: sub_reason_code
+    max_string_length: 20
+  totaldiscount:
+    data_type: DECIMAL(10, 2)
+    db_column: total_discount
+  totalinvoicevalue:
+    data_type: DECIMAL(20, 2)
+    db_column: total_invoice_value
+  totaltax:
+    data_type: DECIMAL(20, 2)
+    db_column: total_tax
+  transportername1:
+    data_type: VARCHAR(20)
+    db_column: transporter_name_1
+    max_string_length: 20
+  transportername2:
+    data_type: VARCHAR(20)
+    db_column: transporter_name_2
+    max_string_length: 20
+  trucknumber:
+    data_type: VARCHAR(20)
+    db_column: truck_number
+    max_string_length: 20
+  ugst:
+    data_type: DECIMAL(10, 2)
+    db_column: ugst
+  uom:
+    data_type: VARCHAR(4)
+    db_column: uom
+    max_string_length: 4
+  updateddate:
+    data_type: INTEGER
+    db_column: updated_date
+  valueforcashdiscount:
+    data_type: DECIMAL(20, 2)
+    db_column: value_for_cash_discount
+  volumeinkg:
+    data_type: DECIMAL(10, 2)
+    db_column: volume_in_kg
+  volumeinltr:
+    data_type: DECIMAL(10, 2)
+    db_column: volume_in_ltr
+  weightunit:
+    data_type: VARCHAR(4)
+    db_column: weight_unit
+    max_string_length: 4
+  za1x:
+    data_type: DECIMAL(10, 2)
+    db_column: za1x
+  zabt:
+    data_type: DECIMAL(10, 2)
+    db_column: zabt
+  zapd:
+    data_type: DECIMAL(10, 2)
+    db_column: zapd
+  zasp:
+    data_type: DECIMAL(10, 2)
+    db_column: zasp
+  zavt:
+    data_type: DECIMAL(10, 2)
+    db_column: zavt
+  zav1:
+    data_type: DECIMAL(10, 2)
+    db_column: zav1
+  zav2:
+    data_type: DECIMAL(10, 2)
+    db_column: zav2
+  zavi:
+    data_type: DECIMAL(10, 2)
+    db_column: zavi
+  zatx:
+    data_type: DECIMAL(10, 2)
+    db_column: zatx
+  zafd:
+    data_type: DECIMAL(10, 2)
+    db_column: zafd
+  zbvt:
+    data_type: DECIMAL(10, 2)
+    db_column: zbvt
+  zcdt:
+    data_type: DECIMAL(10, 2)
+    db_column: zcdt
+  zcep:
+    data_type: DECIMAL(10, 2)
+    db_column: zcep
+  zcga:
+    data_type: DECIMAL(10, 2)
+    db_column: zcga
+  zcmd:
+    data_type: DECIMAL(10, 2)
+    db_column: zcmd
+  zcom:
+    data_type: DECIMAL(10, 2)
+    db_column: zcom
+  zcr1:
+    data_type: DECIMAL(10, 2)
+    db_column: zcr1
+  zcs1:
+    data_type: DECIMAL(10, 2)
+    db_column: zcs1
+  zcsr:
+    data_type: DECIMAL(10, 2)
+    db_column: zcsr
+  zcst:
+    data_type: DECIMAL(10, 2)
+    db_column: zcst
+  zctr:
+    data_type: DECIMAL(10, 2)
+    db_column: zctr
+  zd51:
+    data_type: DECIMAL(10, 2)
+    db_column: zd51
+  zd52:
+    data_type: DECIMAL(10, 2)
+    db_column: zd52
+  zd53:
+    data_type: DECIMAL(10, 2)
+    db_column: zd53
+  zd54:
+    data_type: DECIMAL(10, 2)
+    db_column: zd54
+  zd55:
+    data_type: DECIMAL(10, 2)
+    db_column: zd55
+  zd56:
+    data_type: DECIMAL(10, 2)
+    db_column: zd56
+  zd57:
+    data_type: DECIMAL(10, 2)
+    db_column: zd57
+  zd58:
+    data_type: DECIMAL(10, 2)
+    db_column: zd58
+  zdad:
+    data_type: DECIMAL(10, 2)
+    db_column: zdad
+  zdb1:
+    data_type: DECIMAL(10, 2)
+    db_column: zdb1
+  zdb2:
+    data_type: DECIMAL(10, 2)
+    db_column: zdb2
+  zdbc:
+    data_type: DECIMAL(10, 2)
+    db_column: zdbc
+  zdbk:
+    data_type: DECIMAL(10, 2)
+    db_column: zdbk
+  zddf:
+    data_type: DECIMAL(10, 2)
+    db_column: zddf
+  zdis:
+    data_type: DECIMAL(10, 2)
+    db_column: zdis
+  zdma:
+    data_type: DECIMAL(10, 2)
+    db_column: zdma
+  zebs:
+    data_type: DECIMAL(10, 2)
+    db_column: zebs
+  zepd:
+    data_type: DECIMAL(10, 2)
+    db_column: zepd
+  zexp:
+    data_type: DECIMAL(10, 2)
+    db_column: zexp
+  zfcg:
+    data_type: DECIMAL(10, 2)
+    db_column: zfcg
+  zfds:
+    data_type: DECIMAL(10, 2)
+    db_column: zfds
+  zfm1:
+    data_type: DECIMAL(10, 2)
+    db_column: zfm1
+  zfms:
+    data_type: DECIMAL(10, 2)
+    db_column: zfms
+  zfp1:
+    data_type: DECIMAL(10, 2)
+    db_column: zfp1
+  zfps:
+    data_type: DECIMAL(10, 2)
+    db_column: zfps
+  zfrl:
+    data_type: DECIMAL(10, 2)
+    db_column: zfrl
+  zfrt:
+    data_type: DECIMAL(10, 2)
+    db_column: zfrt
+  zfru:
+    data_type: DECIMAL(10, 2)
+    db_column: zfru
+  zg01:
+    data_type: DECIMAL(10, 2)
+    db_column: zg01
+  ziff:
+    data_type: DECIMAL(10, 2)
+    db_column: ziff
+  zifr:
+    data_type: DECIMAL(10, 2)
+    db_column: zifr
+  zlpd:
+    data_type: DECIMAL(10, 2)
+    db_column: zlpd
+  zm01:
+    data_type: DECIMAL(10, 2)
+    db_column: zm01
+  zmrp:
+    data_type: DECIMAL(10, 2)
+    db_column: zmrp
+  znet:
+    data_type: DECIMAL(10, 2)
+    db_column: znet
+  zoc1:
+    data_type: DECIMAL(10, 2)
+    db_column: zoc1
+  zocd:
+    data_type: DECIMAL(10, 2)
+    db_column: zocd
+  zocs:
+    data_type: DECIMAL(10, 2)
+    db_column: zocs
+  zoct:
+    data_type: DECIMAL(10, 2)
+    db_column: zoct
+  zopd:
+    data_type: DECIMAL(10, 2)
+    db_column: zopd
+  zope:
+    data_type: DECIMAL(10, 2)
+    db_column: zope
+  zosd:
+    data_type: DECIMAL(10, 2)
+    db_column: zosd
+  zotd:
+    data_type: DECIMAL(10, 2)
+    db_column: zotd
+  zpcp:
+    data_type: DECIMAL(10, 2)
+    db_column: zpcp
+  zpdp:
+    data_type: DECIMAL(10, 2)
+    db_column: zpdp
+  zped:
+    data_type: DECIMAL(10, 2)
+    db_column: zped
+  zpjp:
+    data_type: DECIMAL(10, 2)
+    db_column: zpjp
+  zprs:
+    data_type: DECIMAL(10, 2)
+    db_column: zprs
+  zptr:
+    data_type: DECIMAL(10, 2)
+    db_column: zptr
+  zrdi:
+    data_type: DECIMAL(10, 2)
+    db_column: zrdi
+  zsam:
+    data_type: DECIMAL(10, 2)
+    db_column: zsam
+  zscp:
+    data_type: DECIMAL(10, 2)
+    db_column: zscp
+  zsev:
+    data_type: DECIMAL(10, 2)
+    db_column: zsev
+  zsfp:
+    data_type: DECIMAL(10, 2)
+    db_column: zsfp
+  zsh1:
+    data_type: DECIMAL(10, 2)
+    db_column: zsh1
+  zshs:
+    data_type: DECIMAL(10, 2)
+    db_column: zshs
+  zspe:
+    data_type: DECIMAL(10, 2)
+    db_column: zspe
+  zspd:
+    data_type: DECIMAL(10, 2)
+    db_column: zspd
+  zspp:
+    data_type: DECIMAL(10, 2)
+    db_column: zspp
+  zsss:
+    data_type: DECIMAL(10, 2)
+    db_column: zsss
+  zsu1:
+    data_type: DECIMAL(10, 2)
+    db_column: zsu1
+  zsu2:
+    data_type: DECIMAL(10, 2)
+    db_column: zsu2
+  zsur:
+    data_type: DECIMAL(10, 2)
+    db_column: zsur
+  ztod:
+    data_type: DECIMAL(10, 2)
+    db_column: ztod
+  ztrd:
+    data_type: DECIMAL(10, 2)
+    db_column: ztrd
+  ztrp:
+    data_type: DECIMAL(10, 2)
+    db_column: ztrp
+  zupd:
+    data_type: DECIMAL(10, 2)
+    db_column: zupd
+  zva1:
+    data_type: DECIMAL(10, 2)
+    db_column: zva1
+  zvat:
+    data_type: DECIMAL(10, 2)
+    db_column: zvat
+  zvfr:
+    data_type: DECIMAL(10, 2)
+    db_column: zvfr
+  zvsi:
+    data_type: DECIMAL(10, 2)
+    db_column: zvsi
+  zvtr:
+    data_type: DECIMAL(10, 2)
+    db_column: zvtr
+  zvud:
+    data_type: DECIMAL(10, 2)
+    db_column: zvud

@@ -1,0 +1,385 @@
+# ==============================================================================
+# Pidilite DataWiz - Default Configuration (Multi-Provider)
+# ==============================================================================
+# This file contains default configurations that apply to ALL tenants unless
+# overridden in tenant-specific config.yaml files.
+#
+# Purpose:
+#   - Provide sensible defaults for all tenants
+#   - Reduce duplication in tenant-specific configs
+#   - Document all configurable options
+#
+# Tenant-specific configs can override any value here.
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Database Configuration (StarRocks)
+# NOTE: Detailed connection pooling and Stream Load settings are in:
+#       - configs/starrocks/connection_pool.yaml (pooling, timeouts, health checks)
+#       - configs/starrocks/stream_load_defaults.yaml (bulk load parameters)
+# Only basic connection details are here. Tenants can override in their config.yaml
+database:
+  type: "starrocks"                      # Database type
+  host: "127.0.0.1"                      # StarRocks FE host
+  port: 9030                             # MySQL protocol port
+  http_port: 8040                        # HTTP Stream Load port
+
+  # Advanced settings are in configs/starrocks/:
+  # - Connection pooling (pool_size, overflow, recycle, pre_ping, retry)
+  # - Timeouts (connect, query, stream_load)
+  # - Stream Load parameters (format, compression, validation)
+  # - Health checks and monitoring
+  # - Disaster recovery settings
+
+
+# Cloud Storage Provider Defaults
+# These apply to ALL providers unless overridden
+storage:
+  # Download settings
+  download:
+    chunk_size: 8388608                  # 8 MB chunks
+    max_concurrency: 5                   # Parallel downloads
+    timeout: 3600                        # Download timeout (1 hour)
+    retry_attempts: 3                    # Retry failed downloads
+    retry_delay: 5                       # Delay between retries (seconds)
+
+  # Compression settings
+  compression:
+    auto_detect: true                    # Auto-detect .gz, .zip, .bz2
+    keep_compressed: false               # Delete compressed files after extraction
+
+  # Provider-specific defaults (overridden by tenant config)
+  providers:
+    # Azure Blob Storage
+    azure:
+      auth_method: "connection_string"   # connection_string, sas_token, service_principal
+      api_version: "2023-01-03"          # Azure Storage API version
+      max_single_put_size: 67108864      # 64 MB
+      max_block_size: 4194304            # 4 MB
+
+    # AWS S3
+    aws:
+      auth_method: "iam_role"            # iam_role, access_key
+      region: "ap-south-1"               # Default Mumbai region
+      signature_version: "s3v4"          # AWS signature version
+      use_ssl: true                      # Use HTTPS
+
+    # Google Cloud Storage
+    gcp:
+      auth_method: "service_account"     # service_account, workload_identity
+      api_endpoint: "https://storage.googleapis.com"
+
+    # MinIO (S3-compatible)
+    minio:
+      auth_method: "access_key"          # access_key
+      use_ssl: true                      # Use HTTPS
+      signature_version: "s3v4"
+
+    # Local filesystem
+    local:
+      use_symlinks: false                # Copy files instead of symlinks
+      verify_checksums: true             # Verify file integrity
+
+
+# Business Constants Configuration
+# Supports multiple backends: postgres, mysql, mongodb, starrocks
+business_constants:
+  enabled: true                          # Enable business constants
+
+  # Refresh settings
+  refresh:
+    on_startup: true                     # Refresh on ETL startup
+    on_schedule: true                    # Refresh on schedule
+    schedule_cron: "30 19 * * *"         # 7:30 PM daily
+
+  # Backend-specific defaults
+  backends:
+    # PostgreSQL
+    postgres:
+      pool_size: 5
+      max_overflow: 10
+      pool_pre_ping: true
+      connect_timeout: 10
+      query_timeout: 60
+      table_name: "business_constants"
+
+    # MySQL
+    mysql:
+      pool_size: 5
+      max_overflow: 10
+      pool_pre_ping: true
+      connect_timeout: 10
+      query_timeout: 60
+      table_name: "business_constants"
+
+    # MongoDB
+    mongodb:
+      max_pool_size: 10
+      min_pool_size: 1
+      connect_timeout: 10000             # milliseconds
+      server_selection_timeout: 5000     # milliseconds
+      collection: "business_constants"
+
+    # StarRocks (uses main database)
+    starrocks:
+      table_name: "business_constants"
+      distribution: "HASH(constant_id)"
+      replication_num: 1
+
+
+# Data Paths (relative to project root)
+# Pattern: data/{tenant_slug}/{category}/
+data_paths:
+  base: "data"                           # Base data directory
+
+  # Subdirectories (tenant slug will be interpolated)
+  historical:
+    source_files: "{base}/{tenant_slug}/historical/source_files"
+    raw_parquet: "{base}/{tenant_slug}/historical/raw_parquet"
+    cleaned_parquet: "{base}/{tenant_slug}/historical/cleaned_parquet"
+
+  incremental:
+    source_files: "{base}/{tenant_slug}/incremental/source_files"
+    raw_parquet: "{base}/{tenant_slug}/incremental/raw_parquet"
+    cleaned_parquet: "{base}/{tenant_slug}/incremental/cleaned_parquet"
+
+  temp: "{base}/{tenant_slug}/temp"      # Temporary processing files
+
+  # Retention settings
+  retention:
+    source_files_days: 7                 # Delete source files after 7 days
+    raw_parquet_days: 14                 # Delete raw parquet after 14 days
+    cleaned_parquet_days: 90             # Delete cleaned parquet after 90 days
+    temp_files_hours: 24                 # Delete temp files after 24 hours
+
+
+# Logging Configuration
+logging:
+  base_path: "logs"                      # Base log directory
+
+  # Log paths (tenant slug will be interpolated)
+  paths:
+    scheduler: "{base_path}/{tenant_slug}/scheduler"
+    etl: "{base_path}/{tenant_slug}/etl"
+    notifications: "{base_path}/{tenant_slug}/notifications"
+    errors: "{base_path}/{tenant_slug}/errors"
+
+  # Log levels
+  levels:
+    default: "INFO"                      # Default log level
+    scheduler: "INFO"
+    etl: "INFO"
+    database: "WARNING"                  # Reduce database logs
+    azure: "WARNING"                     # Reduce Azure SDK logs
+
+  # Log format
+  format: "[%(asctime)s] [%(tenant_id)s] [%(name)s] [%(levelname)s] %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+  # Rotation settings
+  rotation:
+    max_bytes: 10485760                  # 10 MB per file
+    backup_count: 5                      # Keep 5 backup files
+    retention_days: 30                   # Delete logs after 30 days
+
+
+# ETL Pipeline Configuration
+etl:
+  # Extraction settings
+  extraction:
+    file_types: ["csv", "excel", "parquet"]  # Supported file types
+    excel_extensions: [".xlsx", ".xls"]
+    csv_encoding: "utf-8"                # Default CSV encoding
+    csv_delimiter: ","                   # Default CSV delimiter
+    skip_rows: 0                         # Skip N rows in CSV
+    header_row: 0                        # Header row index
+
+  # Transformation settings
+  transformation:
+    validate_schema: true                # Validate against schema definitions
+    validate_data_types: true            # Validate data types
+    handle_nulls: true                   # Handle null values
+    trim_strings: true                   # Trim whitespace from strings
+    remove_duplicates: false             # Remove duplicate rows (default: keep all)
+
+    # Parquet settings
+    parquet:
+      engine: "polars"                   # polars, pyarrow, pandas
+      compression: "snappy"              # snappy, gzip, lz4, zstd
+      row_group_size: 100000             # Rows per row group
+      use_dictionary: true               # Use dictionary encoding
+
+    # Type conversion
+    type_conversion:
+      strict_mode: false                 # Allow lossy conversions
+      date_format: "%Y%m%d"              # Default date format
+      datetime_format: "%Y-%m-%d %H:%M:%S"
+      decimal_precision: 2               # Default decimal places
+
+  # Loading settings
+  loading:
+    batch_size: 100000                   # Rows per batch
+    parallel_loads: 1                    # Parallel table loads
+    verify_row_count: true               # Verify loaded row count
+    on_error: "rollback"                 # rollback, continue, fail_fast
+
+
+# Scheduler Configuration
+# NOTE: Detailed job schedules and configurations are in:
+#       - scheduler/crontab.yaml (per-job schedules, timeouts, retry counts)
+# These are global execution defaults only.
+scheduler:
+  timezone: "Asia/Kolkata"               # IST timezone
+
+  # Job execution defaults (can be overridden per job in crontab.yaml)
+  execution:
+    max_concurrent_jobs: 3               # Max parallel jobs per tenant
+    job_timeout: 3600                    # Default job timeout (1 hour)
+    retry_attempts: 2                    # Default retry count
+    retry_delay: 300                     # Delay between retries (5 min)
+
+  # Actual job schedules are defined in scheduler/crontab.yaml
+  # Reference times (for documentation):
+  #   - Evening jobs: 6:00 PM daily
+  #   - Morning jobs: 9:00 AM daily
+  #   - Daily summary: 8:00 PM daily
+  #   - Monthly vacuum: 3:00 AM on 1st of month
+
+
+# Observability Configuration
+observability:
+  # OpenTelemetry settings
+  enabled: true                          # Enable tracing/metrics
+
+  # Tracing
+  tracing:
+    enabled: true
+    sample_rate: 1.0                     # Sample 100% of traces
+    export_protocol: "grpc"              # grpc, http
+
+  # Metrics
+  metrics:
+    enabled: true
+    export_interval: 60                  # Export every 60 seconds
+
+  # Signoz integration
+  signoz:
+    enabled: true
+    endpoint: "http://localhost:4317"    # Signoz collector endpoint
+    insecure: true                       # Use insecure connection (dev)
+
+  # Service naming (tenant ID will be appended)
+  service_name_pattern: "datawiz-{tenant_slug}"
+
+
+# Notification Configuration
+notifications:
+  # Email settings
+  email:
+    enabled: true
+    on_success: false                    # Only notify on failure by default
+    on_failure: true
+    include_logs: true                   # Attach log excerpts
+    max_log_lines: 100                   # Max log lines in email
+
+    # SMTP settings (credentials in .env)
+    smtp:
+      host: "smtp.gmail.com"
+      port: 587
+      use_tls: true
+      use_ssl: false
+
+  # Slack (future)
+  slack:
+    enabled: false
+    on_success: false
+    on_failure: true
+
+  # MS Teams (future)
+  teams:
+    enabled: false
+    on_success: false
+    on_failure: true
+
+
+# Feature Flags (can be overridden per tenant)
+features:
+  enable_rls: true                       # Row-level security
+  enable_matviews: true                  # Materialized views
+  enable_dd_logic: true                  # Distributor dashboard logic
+  enable_incremental_loads: true         # Incremental vs full loads
+  enable_data_quality_checks: true       # Data quality validation
+  enable_audit_logging: true             # Audit trail logging
+
+
+# Security Settings
+security:
+  # Credential rotation
+  rotate_credentials_days: 90            # Rotate every 90 days
+
+  # Access control
+  require_authentication: true
+  session_timeout: 3600                  # 1 hour
+
+  # Data encryption
+  encrypt_at_rest: false                 # StarRocks handles this
+  encrypt_in_transit: true               # Use SSL/TLS
+
+
+# Performance Settings
+performance:
+  # Memory limits
+  max_memory_mb: 4096                    # Max memory per ETL job (4 GB)
+
+  # Parallelism
+  max_workers: 4                         # Max parallel workers
+
+  # Caching
+  cache:
+    enabled: true
+    ttl: 3600                            # Cache TTL (1 hour)
+    max_size_mb: 512                     # Max cache size (512 MB)
+
+
+# Maintenance Settings
+maintenance:
+  # Vacuum settings
+  vacuum:
+    enabled: true
+    schedule: "0 3 1 * *"                # 3:00 AM on 1st of month
+    analyze_tables: true                 # Run ANALYZE after vacuum
+
+  # Health checks
+  health_check:
+    enabled: true
+    interval: 300                        # Every 5 minutes
+    endpoints:
+      - starrocks                        # Check StarRocks connection
+      - storage                          # Check cloud storage
+      - business_constants               # Check business constants backend
+
+
+# ==============================================================================
+# Usage Notes
+# ==============================================================================
+# Tenant-specific configs override these defaults:
+#
+# 1. Load order:
+#    a. Load this file (default_config.yaml)
+#    b. Load tenant config (configs/tenants/{slug}/config.yaml)
+#    c. Merge with tenant config taking precedence
+#
+# 2. Path interpolation:
+#    - {tenant_slug} → Tenant slug from registry
+#    - {tenant_id} → Tenant UUID from registry
+#    - {base} → Base directory from this config
+#
+# 3. Environment variables:
+#    - Secrets NEVER go in YAML files
+#    - Use .env files: configs/tenants/{slug}/.env
+#    - Format: {PROVIDER}_{PURPOSE} (e.g., AZURE_STORAGE_CONNECTION_STRING)
+#
+# 4. Provider-specific overrides:
+#    - Each tenant can override storage.providers.{provider_name} settings
+#    - Each tenant can override business_constants.backends.{backend_name} settings
+# ==============================================================================

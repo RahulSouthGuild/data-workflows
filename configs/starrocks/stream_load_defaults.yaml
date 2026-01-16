@@ -1,0 +1,381 @@
+# ==============================================================================
+# Pidilite DataWiz - StarRocks Stream Load Defaults
+# ==============================================================================
+# This file defines default Stream Load parameters for bulk data ingestion.
+# Stream Load is StarRocks' high-performance HTTP-based data loading API.
+#
+# Purpose:
+#   - Standard Stream Load parameters for all tables
+#   - Format-specific configurations (Parquet, CSV, JSON)
+#   - Error handling and validation settings
+#   - Performance tuning defaults
+#
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Global Stream Load Settings
+global:
+  # HTTP endpoint configuration
+  endpoint:
+    protocol: "http"                     # http or https (use https in production)
+    port: 8040                           # Default Stream Load HTTP port
+    path: "/api/{database}/{table}/_stream_load"  # URL path template
+
+  # Authentication
+  auth:
+    method: "basic"                      # Basic HTTP authentication
+    # Credentials from .env: DB_USER, DB_PASSWORD
+
+  # HTTP headers (common to all loads)
+  headers:
+    Expect: "100-continue"               # Enable HTTP 100-continue
+    Content-Type: "application/octet-stream"  # Binary data
+
+
+# Common Load Parameters
+# These apply to all Stream Load requests unless overridden
+common_parameters:
+  # Load behavior
+  format: "parquet"                      # Default: parquet (csv, json also supported)
+  timeout: 600                           # 10 minutes (adjust based on data size)
+  max_filter_ratio: 0.0                  # Reject entire batch if ANY row fails (strict mode)
+  strict_mode: "true"                    # Enable strict mode for data validation
+
+  # Transaction settings
+  two_phase_commit: "false"              # Disable 2PC (use for exactly-once if needed)
+  txn_operation: ""                      # Empty for auto-commit
+
+  # Timezone and locale
+  timezone: "Asia/Kolkata"               # IST timezone for date/time parsing
+  load_mem_limit: 4294967296             # 4 GB memory limit per load
+
+  # Error handling
+  log_rejected_record_num: 100           # Log up to 100 rejected records
+  partial_update: "false"                # Full row updates only
+
+
+# Parquet Format Configuration
+parquet:
+  format: "parquet"
+
+  # Parquet-specific parameters
+  parameters:
+    # Compression (parquet is already compressed, so use uncompressed)
+    compression: "uncompressed"
+
+    # Vectorized loading (much faster for parquet)
+    use_vectorized_load: "true"          # Use vectorized reader
+
+    # Schema settings
+    strict_mode: "true"                  # Strict schema validation
+    enable_replicated_storage: "false"   # Use default replication
+
+  # Column mapping (if parquet columns don't match table columns)
+  # Example: Map parquet column "InvoiceDate" to table column "invoice_date"
+  column_mapping:
+    enabled: false                       # Enable if column names differ
+    # Specify mappings in tenant-specific config:
+    # mappings:
+    #   invoice_date: "InvoiceDate"
+    #   customer_code: "CustomerCode"
+
+  # Performance tuning for parquet
+  performance:
+    max_batch_size: 4096                 # Rows per batch
+    max_batch_bytes: 104857600           # 100 MB per batch
+
+
+# CSV Format Configuration (if needed)
+csv:
+  format: "csv"
+
+  # CSV-specific parameters
+  parameters:
+    # Delimiters
+    column_separator: ","                # Column delimiter
+    row_delimiter: "\n"                  # Row delimiter
+    skip_header: 0                       # Skip N header rows (0 = no skip)
+
+    # Enclosure and escape
+    enclose: "\""                        # Field enclosure character
+    escape: "\\"                         # Escape character
+
+    # Whitespace handling
+    trim_space: "true"                   # Trim leading/trailing spaces
+
+    # Compression (if CSV is compressed)
+    compress_type: ""                    # gzip, bzip2, lz4, deflate (empty = uncompressed)
+
+  # Data type handling
+  type_conversion:
+    null_string: "\\N"                   # Represent NULL as \N
+    date_format: "%Y%m%d"                # YYYYMMDD format
+    datetime_format: "%Y-%m-%d %H:%M:%S"
+
+  # Performance tuning for CSV
+  performance:
+    max_batch_size: 1024                 # Rows per batch (smaller than parquet)
+    max_batch_bytes: 104857600           # 100 MB per batch
+
+
+# JSON Format Configuration (if needed)
+json:
+  format: "json"
+
+  # JSON-specific parameters
+  parameters:
+    # JSON structure
+    strip_outer_array: "true"            # Remove outer array brackets
+    json_root: ""                        # JSON root path (empty = top level)
+
+    # JSON parsing
+    jsonpaths: ""                        # JSONPath expressions (if complex structure)
+    fuzzy_parse: "false"                 # Disable fuzzy parsing for strict validation
+
+    # Null handling
+    null_string: "null"                  # Represent NULL as "null"
+
+  # Performance tuning for JSON
+  performance:
+    max_batch_size: 1024                 # Rows per batch
+    max_batch_bytes: 104857600           # 100 MB per batch
+
+
+# Load Strategy per Table Type
+# Override these in tenant-specific configs if needed
+table_strategies:
+  # Dimension tables (small, static data)
+  dimension_tables:
+    timeout: 300                         # 5 minutes (smaller datasets)
+    max_filter_ratio: 0.0                # Strict mode
+    load_mem_limit: 1073741824           # 1 GB
+
+    # Examples: dim_material_mapping, dim_sales_group, dim_customer
+    tables:
+      - "dim_*"                          # Glob pattern for dimension tables
+
+  # Fact tables (large, incremental data)
+  fact_tables:
+    timeout: 1200                        # 20 minutes (larger datasets)
+    max_filter_ratio: 0.0                # Still strict (can relax to 0.01 for 1% errors)
+    load_mem_limit: 8589934592           # 8 GB
+
+    # Examples: fact_invoice_secondary, fact_invoice_details
+    tables:
+      - "fact_*"                         # Glob pattern for fact tables
+
+  # Bridge tables (many-to-many relationships)
+  bridge_tables:
+    timeout: 300                         # 5 minutes
+    max_filter_ratio: 0.0
+    load_mem_limit: 2147483648           # 2 GB
+
+    tables:
+      - "bridge_*"
+
+  # Staging tables (temporary data)
+  staging_tables:
+    timeout: 600                         # 10 minutes
+    max_filter_ratio: 0.1                # Allow 10% errors (less strict)
+    load_mem_limit: 4294967296           # 4 GB
+    partial_update: "false"
+
+    tables:
+      - "stg_*"
+      - "staging_*"
+
+
+# Incremental vs Full Load Settings
+load_modes:
+  # Incremental load (append new data)
+  incremental:
+    mode: "append"                       # Append to existing data
+    merge_condition: ""                  # Empty for append
+    delete_condition: ""                 # Empty for append
+
+    # Recommended for:
+    # - fact_invoice_secondary (daily incremental)
+    # - fact_invoice_details (daily incremental)
+
+  # Full load (replace all data)
+  full:
+    mode: "replace"                      # Replace existing data
+    truncate_before_load: true           # TRUNCATE table before load
+
+    # Recommended for:
+    # - dim_material_mapping (weekly full refresh)
+    # - dim_sales_group (weekly full refresh)
+
+  # Upsert (merge based on key)
+  upsert:
+    mode: "merge"                        # Merge on duplicate key
+    merge_condition: ""                  # Specify key columns in tenant config
+    delete_condition: ""                 # Optional: DELETE old records
+
+    # Example merge_condition:
+    # "customer_code, material_code, invoice_date"
+
+    # Recommended for:
+    # - Reference data that may have updates
+
+
+# Error Handling and Retries
+error_handling:
+  # Retry configuration
+  retry:
+    enabled: true                        # Enable automatic retries
+    max_attempts: 3                      # Max 3 attempts
+    backoff_factor: 5                    # Wait 5, 10, 15 seconds
+
+    # Retry on these HTTP status codes
+    retry_on_status:
+      - 500                              # Internal Server Error
+      - 502                              # Bad Gateway
+      - 503                              # Service Unavailable
+      - 504                              # Gateway Timeout
+
+    # Don't retry on these (client errors)
+    no_retry_on_status:
+      - 400                              # Bad Request
+      - 401                              # Unauthorized
+      - 403                              # Forbidden
+      - 404                              # Not Found
+
+  # Error logging
+  logging:
+    log_rejected_records: true           # Log rejected records
+    max_rejected_records: 100            # Log first 100 rejects
+    rejected_record_path: "logs/{tenant_slug}/rejected_records/"  # Path template
+
+  # Failure actions
+  on_failure:
+    action: "rollback"                   # rollback, continue, fail_fast
+    notify: true                         # Send notification on failure
+    save_failed_batch: true              # Save failed batch for investigation
+
+
+# Performance Optimization
+performance:
+  # Parallelism
+  parallel_loads:
+    enabled: false                       # Load one table at a time (safer)
+    max_concurrent_loads: 1              # Max concurrent Stream Load requests
+
+  # Batch sizing
+  batch_size:
+    auto_tune: true                      # Auto-tune based on data size
+    min_batch_size: 1000                 # Minimum rows per batch
+    max_batch_size: 100000               # Maximum rows per batch
+    target_batch_bytes: 104857600        # Target 100 MB per batch
+
+  # HTTP connection pooling
+  http_pool:
+    max_connections: 5                   # Max concurrent HTTP connections
+    keep_alive: true                     # Use HTTP keep-alive
+    pool_timeout: 30                     # Pool checkout timeout
+
+
+# Monitoring and Metrics
+monitoring:
+  # Track load metrics
+  metrics:
+    enabled: true
+    collect_interval: 60                 # Collect every minute
+
+    # Metrics to track
+    tracked_metrics:
+      - load_time                        # Total load time
+      - rows_loaded                      # Number of rows loaded
+      - rows_rejected                    # Number of rows rejected
+      - bytes_loaded                     # Bytes loaded
+      - throughput_mbps                  # Throughput in MB/s
+
+  # Slow load detection
+  slow_load:
+    enabled: true
+    threshold: 600                       # Warn if load > 10 minutes
+    action: "log_warning"                # log_warning, send_alert
+
+  # Success/failure tracking
+  tracking:
+    log_success: true                    # Log successful loads
+    log_failure: true                    # Log failed loads
+    include_details: true                # Include row counts, errors
+
+
+# Validation and Data Quality
+validation:
+  # Pre-load validation
+  pre_load:
+    check_file_exists: true              # Verify file exists
+    check_file_size: true                # Verify file not empty
+    min_file_size_bytes: 100             # Minimum 100 bytes
+
+  # Post-load validation
+  post_load:
+    verify_row_count: true               # Compare loaded vs source row count
+    row_count_tolerance: 0.0             # 0% tolerance (exact match)
+
+    verify_checksum: false               # Checksum verification (optional)
+
+  # Schema validation
+  schema:
+    validate_columns: true               # Verify columns match schema
+    validate_types: true                 # Verify data types match
+    strict_schema: true                  # Reject if schema mismatch
+
+
+# ==============================================================================
+# Usage Examples
+# ==============================================================================
+# 1. Basic Stream Load (Parquet):
+#    curl --location-trusted -u user:password \
+#      -H "label:fact_invoice_secondary_20250116" \
+#      -H "format:parquet" \
+#      -H "timeout:600" \
+#      -H "max_filter_ratio:0.0" \
+#      -T data.parquet \
+#      http://localhost:8040/api/datawiz_tenant1/fact_invoice_secondary/_stream_load
+#
+# 2. CSV with column mapping:
+#    curl --location-trusted -u user:password \
+#      -H "label:dim_material_20250116" \
+#      -H "format:csv" \
+#      -H "column_separator:," \
+#      -H "columns:material_code,material_desc,brand" \
+#      -T data.csv \
+#      http://localhost:8040/api/datawiz_tenant1/dim_material/_stream_load
+#
+# 3. Incremental load with timeout:
+#    -H "timeout:1200"                  # 20 minutes for large dataset
+#    -H "max_filter_ratio:0.001"        # Allow 0.1% errors
+#
+# ==============================================================================
+# Usage Notes
+# ==============================================================================
+# 1. Label format: {table_name}_{YYYYMMDD}_{HHMMSS} for uniqueness
+#
+# 2. Format selection:
+#    - Parquet: Best performance, compressed, schema-aware
+#    - CSV: Universal compatibility, human-readable
+#    - JSON: Complex nested structures
+#
+# 3. Timeout tuning:
+#    - Dimension tables: 300s (5 min) for < 1M rows
+#    - Fact tables: 600-1200s (10-20 min) for 10M+ rows
+#    - Rule of thumb: ~1 min per 1M rows for parquet
+#
+# 4. max_filter_ratio:
+#    - 0.0: Strict mode, reject if ANY row fails (recommended)
+#    - 0.001: Allow 0.1% errors (1 in 1000 rows)
+#    - 0.01: Allow 1% errors (1 in 100 rows)
+#
+# 5. Memory limits:
+#    - load_mem_limit: Per-load memory (default 4GB)
+#    - Increase for very large batches or complex transformations
+#
+# 6. Error investigation:
+#    - Check rejected_record_path for failed rows
+#    - Review StarRocks FE log: fe/log/fe.log
+#    - Review BE log: be/log/be.INFO
+# ==============================================================================

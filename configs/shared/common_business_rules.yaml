@@ -1,0 +1,337 @@
+# ==============================================================================
+# Pidilite DataWiz - Common Business Rules
+# ==============================================================================
+# This file defines validation rules and business logic that apply across
+# ALL tenants. Tenant-specific business rules go in tenant config directories.
+#
+# Purpose:
+#   - Data quality validation rules
+#   - Schema validation constraints
+#   - Common data transformation rules
+#   - Cross-tenant consistency checks
+#
+# Last Updated: 2025-01-16
+# ==============================================================================
+
+# Data Quality Rules
+data_quality:
+  # Null value handling
+  null_handling:
+    critical_fields:
+      # Fields that must NEVER be null in any tenant
+      - invoice_date
+      - invoice_no
+      - customer_code
+      - material_code
+
+    warning_fields:
+      # Fields that should ideally not be null (log warning, don't fail)
+      - dealer_name
+      - material_description
+      - sales_office_code
+
+    allowed_null_fields:
+      # Fields where nulls are acceptable
+      - remarks
+      - comments
+      - additional_info
+
+  # Data type validation
+  data_types:
+    # String fields
+    strings:
+      max_length: 500                    # Default max string length
+      trim_whitespace: true              # Remove leading/trailing spaces
+      empty_as_null: true                # Treat empty strings as null
+
+    # Numeric fields
+    numeric:
+      allow_negative: false              # Disallow negative values (default)
+      precision: 18                      # Max total digits
+      scale: 4                           # Max decimal places
+      zero_as_null: false                # Keep zero values
+
+    # Date fields
+    dates:
+      format: "%Y%m%d"                   # Default YYYYMMDD format
+      min_date: "19000101"               # Minimum valid date
+      max_date: "20991231"               # Maximum valid date
+      future_dates_allowed: false        # Disallow future dates
+
+    # Boolean fields
+    booleans:
+      true_values: ["Y", "Yes", "1", "True", "true"]
+      false_values: ["N", "No", "0", "False", "false"]
+
+  # Range validation
+  ranges:
+    # Quantity fields
+    quantity:
+      min: 0                             # Minimum quantity
+      max: 999999999                     # Maximum quantity
+      default: 0                         # Default if invalid
+
+    # Amount fields
+    amount:
+      min: 0                             # Minimum amount
+      max: 9999999999.99                 # Maximum amount
+      default: 0.0                       # Default if invalid
+
+    # Rate fields
+    rate:
+      min: 0                             # Minimum rate
+      max: 9999999.99                    # Maximum rate
+      default: 0.0                       # Default if invalid
+
+  # Pattern validation (regex)
+  patterns:
+    # Invoice number format (example - override per tenant)
+    invoice_no: "^[A-Z0-9]{8,20}$"       # 8-20 alphanumeric chars
+
+    # Customer code format
+    customer_code: "^[A-Z0-9]{4,12}$"    # 4-12 alphanumeric chars
+
+    # Material code format
+    material_code: "^[A-Z0-9]{4,18}$"    # 4-18 alphanumeric chars
+
+    # Email format
+    email: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+  # Duplicate detection
+  duplicates:
+    check_enabled: true                  # Enable duplicate checking
+    action: "warn"                       # warn, remove, fail
+
+    # Composite keys for duplicate detection (override per table)
+    keys:
+      fact_invoice_secondary:
+        - invoice_date
+        - customer_code
+        - invoice_no
+        - material_code
+
+      fact_invoice_details:
+        - invoice_date
+        - customer_code
+        - invoice_no
+        - item_no
+
+
+# Schema Validation Rules
+schema_validation:
+  # Column name rules
+  column_names:
+    case: "snake_case"                   # snake_case, camelCase, PascalCase
+    max_length: 64                       # Max column name length
+    allowed_chars: "a-z0-9_"             # Allowed characters
+    reserved_words:                      # Reserved SQL keywords to avoid
+      - select
+      - from
+      - where
+      - order
+      - group
+
+  # Table name rules
+  table_names:
+    prefix_required: false               # No prefix required
+    case: "snake_case"
+    max_length: 64
+    allowed_prefixes:
+      - dim_                             # Dimension tables
+      - fact_                            # Fact tables
+      - bridge_                          # Bridge tables
+
+  # Index rules
+  indexes:
+    max_per_table: 10                    # Max indexes per table
+    min_cardinality: 0.01                # Min 1% unique values for index
+
+  # Distribution rules (StarRocks)
+  distribution:
+    recommended_columns:                 # Recommended distribution columns
+      - customer_code
+      - material_code
+      - invoice_no
+    bucket_count: "auto"                 # Auto-calculate buckets
+
+
+# Data Transformation Rules
+transformation_rules:
+  # String transformations
+  strings:
+    uppercase_fields:                    # Fields to convert to uppercase
+      - customer_code
+      - material_code
+      - dealer_code
+      - sales_office_code
+
+    lowercase_fields:                    # Fields to convert to lowercase
+      - email
+      - website
+
+    trim_fields: "all"                   # Trim all string fields
+
+  # Numeric transformations
+  numeric:
+    round_decimals: 2                    # Round to 2 decimal places
+    replace_inf_with_null: true          # Replace infinity with null
+    replace_nan_with_null: true          # Replace NaN with null
+
+  # Date transformations
+  dates:
+    standardize_format: true             # Convert to YYYYMMDD
+    timezone: "Asia/Kolkata"             # IST timezone
+    auto_detect_format: true             # Try to detect date format
+
+  # Computed columns (common patterns)
+  computed:
+    # Fiscal year (Apr-Mar)
+    fiscal_year:
+      enabled: true
+      logic: |
+        IF(MONTH(invoice_date) >= 4,
+           YEAR(invoice_date),
+           YEAR(invoice_date) - 1)
+
+    # Fiscal quarter
+    fiscal_quarter:
+      enabled: true
+      logic: |
+        CASE
+          WHEN MONTH(invoice_date) IN (4,5,6) THEN 'Q1'
+          WHEN MONTH(invoice_date) IN (7,8,9) THEN 'Q2'
+          WHEN MONTH(invoice_date) IN (10,11,12) THEN 'Q3'
+          ELSE 'Q4'
+        END
+
+
+# Performance Guidelines
+performance:
+  # Batch processing
+  batch_size:
+    min: 1000                            # Minimum batch size
+    max: 500000                          # Maximum batch size
+    recommended: 100000                  # Recommended batch size
+
+  # Partitioning recommendations
+  partitioning:
+    date_based:
+      enabled: true
+      column: "invoice_date"
+      granularity: "month"               # day, month, year
+
+  # Materialized view refresh
+  matview_refresh:
+    strategy: "incremental"              # incremental, full
+    schedule: "0 19 * * *"               # 7:00 PM daily
+
+
+# Error Handling Rules
+error_handling:
+  # Validation errors
+  validation_errors:
+    max_error_rate: 0.001                # Max 0.1% error rate
+    action: "log_and_skip"               # log_and_skip, fail_immediately
+
+  # Type conversion errors
+  type_conversion_errors:
+    action: "convert_to_null"            # convert_to_null, fail, skip_row
+
+  # Missing required fields
+  missing_required_fields:
+    action: "fail"                       # fail, skip_row, use_default
+
+  # Duplicate records
+  duplicate_records:
+    action: "keep_first"                 # keep_first, keep_last, fail
+
+
+# Audit and Compliance
+audit:
+  # Change tracking
+  track_changes: true                    # Enable change tracking
+
+  # Audit columns (auto-added to all tables)
+  audit_columns:
+    - column_name: "created_at"
+      data_type: "DATETIME"
+      default: "CURRENT_TIMESTAMP"
+
+    - column_name: "updated_at"
+      data_type: "DATETIME"
+      default: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+
+    - column_name: "created_by"
+      data_type: "VARCHAR(100)"
+      default: "SYSTEM"
+
+    - column_name: "updated_by"
+      data_type: "VARCHAR(100)"
+      default: "SYSTEM"
+
+  # Retention policies
+  retention:
+    min_retention_days: 365              # Minimum 1 year retention
+    max_retention_days: 2555             # Maximum 7 years retention
+
+
+# Data Lineage
+lineage:
+  # Track data sources
+  track_source: true                     # Enable source tracking
+
+  # Lineage metadata columns
+  lineage_columns:
+    - column_name: "source_file"
+      data_type: "VARCHAR(500)"
+
+    - column_name: "source_system"
+      data_type: "VARCHAR(100)"
+
+    - column_name: "load_timestamp"
+      data_type: "DATETIME"
+
+    - column_name: "load_batch_id"
+      data_type: "VARCHAR(50)"
+
+
+# Notification Thresholds
+notification_thresholds:
+  # Data volume changes
+  data_volume:
+    warn_increase: 1.5                   # Warn if 50% increase
+    warn_decrease: 0.5                   # Warn if 50% decrease
+
+  # Error rates
+  error_rate:
+    warn_threshold: 0.001                # 0.1%
+    critical_threshold: 0.01             # 1%
+
+  # Processing time
+  processing_time:
+    warn_threshold: 3600                 # 1 hour
+    critical_threshold: 7200             # 2 hours
+
+
+# ==============================================================================
+# Usage Notes
+# ==============================================================================
+# 1. These rules apply to ALL tenants unless overridden in tenant config
+#
+# 2. Tenant-specific overrides:
+#    - Create tenant_business_rules.yaml in tenant config directory
+#    - Override specific rules while inheriting others
+#
+# 3. Validation order:
+#    a. Schema validation (column names, types)
+#    b. Data quality validation (nulls, ranges, patterns)
+#    c. Business logic validation (tenant-specific rules)
+#    d. Cross-table validation (referential integrity)
+#
+# 4. Error actions:
+#    - fail: Stop processing and raise error
+#    - warn: Log warning and continue
+#    - skip_row: Skip invalid row and continue
+#    - use_default: Replace with default value and continue
+#    - convert_to_null: Convert invalid value to null
+# ==============================================================================
