@@ -1,0 +1,12 @@
+# dim_sales_group - Schema Definition
+# Converted from 05_DimSalesGroup.py
+# Type: TABLE
+# Order: 5
+
+name: dim_sales_group
+type: TABLE
+order: 5
+sql: "CREATE TABLE dim_sales_group (\n            division VARCHAR(50) NOT NULL,\n            sales_group SMALLINT NOT NULL,\n            vertical VARCHAR(50) NOT NULL\n        )\n        DISTRIBUTED BY HASH(sales_group) BUCKETS 10\n        PROPERTIES (\n            \"replication_num\" = \"1\"\n        );"
+comments:
+  table: Stores unique Sales Group codes and their corresponding divisions and verticals.
+  columns: {}

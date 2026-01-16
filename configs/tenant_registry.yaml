@@ -96,7 +96,7 @@ tenants:
     tenant_name: "Uthra Global"
 
     # Status
-    enabled: false                          # Not yet onboarded
+    enabled: true                          # Not yet onboarded
 
     # Database Configuration
     database_name: "datawiz_uthra_global"

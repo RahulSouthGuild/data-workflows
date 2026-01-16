@@ -1,0 +1,130 @@
+# ==============================================================================
+# Pidilite DataWiz - Tenant Configuration: Uthra Global
+# ==============================================================================
+# This is the configuration for Uthra Global tenant.
+#
+# Tenant ID: 552d4da3-d7f5-4204-b324-d8574754b0fe
+# Created: 2026-01-17
+# Last Updated: 2026-01-17
+# ==============================================================================
+
+# Tenant Metadata
+tenant_id: "552d4da3-d7f5-4204-b324-d8574754b0fe"
+tenant_slug: "uthra-global"
+tenant_name: "Uthra Global"
+enabled: true
+
+# Database Configuration
+database:
+  database_name: "datawiz_uthra_global"
+  user: "uthra_global_admin"
+  # Password in .env: DB_PASSWORD
+
+  # Using defaults from configs/shared/default_config.yaml:
+  # host: 127.0.0.1
+  # port: 9030
+  # http_port: 8040
+
+
+# ==============================================================================
+# Cloud Storage: AWS S3
+# ==============================================================================
+storage_provider: "aws"
+
+storage_config:
+  # AWS S3 settings
+  bucket_name: "uthra-global-data"
+  region: "ap-south-1"  # Mumbai region
+  folder_prefix: "raw_data/"
+
+  # Authentication: iam_role (more secure than access keys)
+  auth_method: "iam_role"
+  # If using access_key: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env
+
+
+# ==============================================================================
+# Business Constants: StarRocks (same database)
+# ==============================================================================
+business_constants:
+  enabled: true
+  backend: "starrocks"
+
+  # Store in same StarRocks database
+  table_name: "business_constants"
+
+
+# Data Paths
+# Inherits from configs/shared/default_config.yaml with tenant_slug interpolation
+data_paths:
+  base: "data"
+  # Paths will resolve to:
+  # - data/uthra-global/historical/source_files/
+  # - data/uthra-global/historical/raw_parquet/
+  # - data/uthra-global/historical/cleaned_parquet/
+  # - data/uthra-global/incremental/source_files/
+  # - data/uthra-global/incremental/raw_parquet/
+  # - data/uthra-global/incremental/cleaned_parquet/
+  # - data/uthra-global/temp/
+
+
+# Logging Configuration
+logging:
+  base_path: "logs"
+  # Paths will resolve to:
+  # - logs/uthra-global/scheduler/
+  # - logs/uthra-global/etl/
+  # - logs/uthra-global/notifications/
+  # - logs/uthra-global/errors/
+
+  # Override log levels if needed
+  levels:
+    default: "INFO"
+    etl: "INFO"
+    database: "WARNING"
+
+
+# Business Rules (Tenant-Specific)
+business_rules:
+  # Date filter for FactInvoiceSecondary
+  # Only load data from April 1, 2023 onwards
+  date_filter_start: "20230401"
+
+  # Sales threshold for business constants filtering
+  min_sales_threshold: 0
+
+
+# Stream Load Configuration (optional overrides)
+stream_load:
+  # Inherits from shared defaults, can override here if needed
+  # timeout: 900
+  # max_error_ratio: 0.0
+  # chunk_size: 8192
+
+
+# Scheduler Configuration
+scheduler:
+  timezone: "Asia/Kolkata"
+  enable_evening_jobs: true   # Dimension sync jobs
+  enable_morning_jobs: true   # Fact load jobs
+
+  # Job timing (optional overrides)
+  # evening_job_time: "18:00"
+  # morning_job_time: "06:00"
+
+
+# Observability
+observability:
+  service_name: "datawiz-uthra-global"
+  # If Signoz or OpenTelemetry is enabled globally
+
+
+# Feature Flags
+features:
+  enable_rls: true                    # Row-Level Security
+  enable_matviews: true               # Materialized views
+  enable_dd_logic: false              # Distributor dashboard logic (not needed)
+  enable_incremental_loads: true      # Incremental vs full loads
+
+
+# Notes
+notes: "Uthra Global tenant - Uses AWS S3 for storage and StarRocks for business constants."

@@ -1,0 +1,16 @@
+# fact_invoice_secondary - Schema Definition
+# Converted from 08_FactInvoiceSecondary.py
+# Type: TABLE
+# Order: 8
+
+name: fact_invoice_secondary
+type: TABLE
+order: 8
+sql: "CREATE TABLE fact_invoice_secondary (\n                active_flag SMALLINT,\n                invoice_date INTEGER,\n                customer_code VARCHAR(12),\n                cash_discount DOUBLE,\n                cgst_amount DOUBLE,\n                cgst_percentage DOUBLE,\n                created_by_source VARCHAR(355),\n                created_date INTEGER,\n                creation_date_source INTEGER,\n                customer_code_original INTEGER,\n                updated_by_source VARCHAR(20),\n                updation_date_source INTEGER,\n                value DOUBLE,\n                vat_amount DOUBLE,\n                vat_percentage DOUBLE,\n                volume DOUBLE,\n                volume_in_kg DOUBLE,\n                volume_in_ltr DOUBLE,\n                year_month INTEGER,\n                damage_quantity DOUBLE,\n                darpan_ship_to_code VARCHAR(500),\n                dealer_code VARCHAR(500),\n                dealer_code_dp VARCHAR(180),\n    \
+  \            dealer_sg_key VARCHAR(150),\n                deleted_flag SMALLINT,\n                discount_amount DOUBLE,\n                division_code SMALLINT,\n                foc_quantity DOUBLE,\n                freight_amount DOUBLE,\n                igst_amount DOUBLE,\n                igst_percentage DOUBLE,\n                invoice_date_df VARCHAR(150),\n                invoice_no VARCHAR(150),\n                invoice_print_number VARCHAR(160),\n                fis_sg_id_cc_in VARCHAR(40),\n                item_code VARCHAR(200),\n                item_determination_code VARCHAR(120),\n                item_weight DOUBLE,\n                load_flag VARCHAR(150),\n                mfg_list_no VARCHAR(150),\n                mis_type VARCHAR(150),\n                mrp DOUBLE,\n                net_weight_in_kg DOUBLE,\n                order_no VARCHAR(200),\n                print_date VARCHAR(150),\n                printer_name VARCHAR(200),\n                rate DOUBLE,\n        \
+  \        receivable_date INTEGER,\n                record_type VARCHAR(150),\n                reporting_unit DOUBLE,\n                reporting_unit_in_each DOUBLE,\n                reporting_value DOUBLE,\n                revised_net_value_msgvg DOUBLE,\n                revised_net_value_mvg DOUBLE,\n                route_code VARCHAR(150),\n                route_name VARCHAR(200),\n                sales_group_code SMALLINT,\n                scheme_amount DOUBLE,\n                sgst_amount DOUBLE,\n                sgst_percentage DOUBLE,\n                star_discount DOUBLE,\n                stock_required_quantity DOUBLE,\n                tcs_per DOUBLE,\n                tcs_val DOUBLE,\n                transfer_date INTEGER,\n                tsi_code VARCHAR(150),\n                tsi_name VARCHAR(200),\n                type VARCHAR(355)\n            )\n            DISTRIBUTED BY HASH(customer_code) BUCKETS 20\n            PROPERTIES (\n                \"replication_num\" = \"1\"\
+  \n            );"
+comments:
+  table: Stores secondary invoice transaction data.
+  columns:
+    fis_sg_id_cc_in: Generated as concatenation of invoice_date, customer_code and invoice_no
