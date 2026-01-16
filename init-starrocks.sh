@@ -248,40 +248,40 @@ init_database_and_user() {
     print_success "Connected to FE MySQL interface"
 
     # Check if database already exists
-    DB_EXISTS=$(docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -sN -e "SHOW DATABASES LIKE 'datawiz'" 2>/dev/null || echo "")
+    DB_EXISTS=$(docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -sN -e "SHOW DATABASES LIKE 'pidilite_db'" 2>/dev/null || echo "")
 
     if [ -n "$DB_EXISTS" ]; then
-        print_warning "Database 'datawiz' already exists"
+        print_warning "Database 'pidilite_db' already exists"
     else
-        print_info "Creating database 'datawiz'..."
-        docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "CREATE DATABASE IF NOT EXISTS datawiz;" || {
+        print_info "Creating database 'pidilite_db'..."
+        docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "CREATE DATABASE IF NOT EXISTS pidilite_db;" || {
             print_error "Failed to create database"
             exit 1
         }
-        print_success "Database 'datawiz' created successfully"
+        print_success "Database 'pidilite_db' created successfully"
     fi
 
     # Check if user already exists
-    USER_EXISTS=$(docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -sN -e "SELECT COUNT(*) FROM mysql.user WHERE user='datawiz_admin' AND host='%'" 2>/dev/null || echo "0")
+    USER_EXISTS=$(docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -sN -e "SELECT COUNT(*) FROM mysql.user WHERE user='pidilite_admin' AND host='%'" 2>/dev/null || echo "0")
 
     if [ "$USER_EXISTS" -gt 0 ]; then
-        print_warning "User 'datawiz_admin' already exists"
+        print_warning "User 'pidilite_admin' already exists"
     else
-        print_info "Creating user 'datawiz_admin'..."
-        docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "CREATE USER IF NOT EXISTS 'datawiz_admin'@'%' IDENTIFIED BY '0jqhC3X541tP1RmR.5';" || {
+        print_info "Creating user 'pidilite_admin'..."
+        docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "CREATE USER IF NOT EXISTS 'pidilite_admin'@'%' IDENTIFIED BY '0jqhC3X541tP1RmR.5';" || {
             print_error "Failed to create user"
             exit 1
         }
-        print_success "User 'datawiz_admin' created successfully"
+        print_success "User 'pidilite_admin' created successfully"
     fi
 
     # Grant privileges (comprehensive permissions for table creation and data operations)
-    print_info "Granting privileges to 'datawiz_admin'..."
+    print_info "Granting privileges to 'pidilite_admin'..."
     
-    # Grant ALL PRIVILEGES on datawiz database for all table operations
+    # Grant ALL PRIVILEGES on pidilite_db database for all table operations
     docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e \
-        "GRANT ALL PRIVILEGES ON datawiz.* TO 'datawiz_admin'@'%';" || {
-        print_error "Failed to grant privileges on datawiz"
+        "GRANT ALL PRIVILEGES ON pidilite_db.* TO 'pidilite_admin'@'%';" || {
+        print_error "Failed to grant privileges on pidilite_db"
         exit 1
     }
     print_success "Table privileges granted successfully"
@@ -289,21 +289,21 @@ init_database_and_user() {
     # Grant SELECT on information_schema for schema inspection
     print_info "Granting SELECT on information_schema..."
     docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e \
-        "GRANT SELECT ON information_schema.* TO 'datawiz_admin'@'%';" || {
+        "GRANT SELECT ON information_schema.* TO 'pidilite_admin'@'%';" || {
         print_warning "Failed to grant information_schema access (may already be granted)"
     }
     
     # Grant db_admin role for full database administration capabilities
-    print_info "Granting db_admin role to 'datawiz_admin'..."
+    print_info "Granting db_admin role to 'pidilite_admin'..."
     docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e \
-        "GRANT db_admin TO USER 'datawiz_admin'@'%';" 2>/dev/null || {
+        "GRANT db_admin TO USER 'pidilite_admin'@'%';" 2>/dev/null || {
         print_warning "db_admin role grant failed (may already be granted)"
     }
 
-    # Set db_admin as default role for 'datawiz_admin'
-    print_info "Activating db_admin role as default for 'datawiz_admin'..."
+    # Set db_admin as default role for 'pidilite_admin'
+    print_info "Activating db_admin role as default for 'pidilite_admin'..."
     docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e \
-        "SET DEFAULT ROLE db_admin TO 'datawiz_admin'@'%';" || {
+        "SET DEFAULT ROLE db_admin TO 'pidilite_admin'@'%';" || {
         print_warning "Failed to set default role (may already be set)"
     }
     
@@ -313,15 +313,15 @@ init_database_and_user() {
 
     # Verify database exists
     print_info "Verifying database creation..."
-    docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "SHOW DATABASES LIKE 'datawiz';" 2>/dev/null || {
+    docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "SHOW DATABASES LIKE 'pidilite_db';" 2>/dev/null || {
         print_warning "Could not verify database"
     }
 
-    print_success "Database 'datawiz' and user 'datawiz_admin' initialized successfully!"
+    print_success "Database 'pidilite_db' and user 'pidilite_admin' initialized successfully!"
     echo ""
     print_info "Access Information:"
-    echo "  Database: datawiz"
-    echo "  Username: datawiz_admin (or use 'root' for admin access)"
+    echo "  Database: pidilite_db"
+    echo "  Username: pidilite_admin (or use 'root' for admin access)"
     echo "  Password: 0jqhC3X541tP1RmR.5"
     echo "  Host: 127.0.0.1 or localhost"
     echo "  Port: 9030"
@@ -329,7 +329,7 @@ init_database_and_user() {
     print_info "For table creation with 2 backend nodes, use replication_num='1':"
     echo "  CREATE TABLE table_name (...) PROPERTIES('replication_num'='1');"
     echo ""
-    print_warning "Note: datawiz_admin has read/write access. Use 'root' for DDL operations."
+    print_warning "Note: pidilite_admin has read/write access. Use 'root' for DDL operations."
 }
 
 
@@ -434,7 +434,7 @@ check_status() {
     echo ""
 
     print_info "Users:"
-    docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "SELECT user, host FROM mysql.user WHERE user IN ('root', 'datawiz_admin')" 2>/dev/null || print_error "Cannot query users"
+    docker exec $FE_CONTAINER mysql -h 127.0.0.1 -P $FE_PORT -u root -e "SELECT user, host FROM mysql.user WHERE user IN ('root', 'pidilite_admin')" 2>/dev/null || print_error "Cannot query users"
     echo ""
 
     # Resource usage
@@ -446,14 +446,14 @@ check_status() {
     print_section "Access Information"
     echo -e "${GREEN}StarRocks FE Web UI:${NC}  http://localhost:8030"
     echo -e "${GREEN}MySQL (root):${NC}        mysql -h 127.0.0.1 -P 9030 -u root"
-    echo -e "${GREEN}MySQL (datawiz_admin):${NC} mysql -h 127.0.0.1 -P 9030 -u datawiz_admin -p"
+    echo -e "${GREEN}MySQL (pidilite_admin):${NC} mysql -h 127.0.0.1 -P 9030 -u pidilite_admin -p"
     echo -e "${GREEN}StarRocks BE Web UIs:${NC}"
     for i in "${!BE_CONTAINERS[@]}"; do
         be_container="${BE_CONTAINERS[$i]}"
         be_port="${BE_HTTP_PORTS[$i]}"
         echo -e "  ${be_container}: http://localhost:${be_port}"
     done
-    echo -e "${GREEN}Database:${NC}            datawiz"
+    echo -e "${GREEN}Database:${NC}            pidilite_db"
     echo ""
 }
 
@@ -505,11 +505,11 @@ main() {
             echo ""
             echo -e "${GREEN}Next steps:${NC}"
             echo "1. Connect to StarRocks (root): mysql -h 127.0.0.1 -P 9030 -u root"
-            echo "2. Connect to StarRocks (datawiz_admin): mysql -h 127.0.0.1 -P 9030 -u datawiz_admin -p"
+            echo "2. Connect to StarRocks (pidilite_admin): mysql -h 127.0.0.1 -P 9030 -u pidilite_admin -p"
             echo "   Password: 0jqhC3X541tP1RmR.5"
-            echo "3. Database: datawiz"
+            echo "3. Database: pidilite_db"
             echo "4. Review STARROCKS_SETUP.md for detailed configuration"
-            echo "5. Start your ETL application: docker-compose up -d datawiz"
+            echo "5. Start your ETL application: docker-compose up -d pidilite_db"
             ;;
         *)
             show_usage

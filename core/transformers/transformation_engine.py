@@ -4,6 +4,10 @@ Unified Transformation Engine
 Single source of truth for all data transformation and validation logic.
 Used by ETL pipelines, parquet cleaner, and all data processing workflows.
 
+Supports both legacy (single-tenant) and multi-tenant modes:
+- Legacy: Uses db/schemas and db/column_mappings (backward compatible)
+- Multi-tenant: Uses configs/tenants/{tenant_slug}/schemas and column_mappings
+
 Core Functions:
 - validate_and_transform_dataframe: Complete transformation with validation
 - detect_data_overflows: Check for type mismatches and overflows
@@ -13,28 +17,42 @@ Core Functions:
 import sys
 import json
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, TYPE_CHECKING
 from datetime import datetime
 
 import polars as pl
+
+if TYPE_CHECKING:
+    from orchestration.tenant_manager import TenantConfig
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from utils.schema_validator import SchemaValidator  # noqa: E402
 
-# Initialize schema validator with schema files from db/schemas and column mappings
+# Legacy paths (backward compatibility)
 SCHEMAS_DIR = Path(__file__).parent.parent.parent / "db" / "schemas"
 COLUMN_MAPPINGS_DIR = Path(__file__).parent.parent.parent / "db" / "column_mappings"
 COMPUTED_COLUMNS_FILE = Path(__file__).parent.parent.parent / "db" / "computed_columns.json"
+
+# Initialize legacy validator (backward compatibility)
 validator = SchemaValidator.from_schema_files(SCHEMAS_DIR, COLUMN_MAPPINGS_DIR)
 
+# Legacy computed columns config (backward compatibility)
+def load_computed_columns_config(computed_columns_file: Path = None) -> Dict:
+    """
+    Load computed columns configuration from JSON file.
 
-# Load computed columns configuration
-def load_computed_columns_config() -> Dict:
-    """Load computed columns configuration from JSON file."""
-    if COMPUTED_COLUMNS_FILE.exists():
-        with open(COMPUTED_COLUMNS_FILE, "r") as f:
+    Args:
+        computed_columns_file: Optional path to computed columns file.
+                              If None, uses legacy path.
+
+    Returns:
+        Dictionary of computed column configurations
+    """
+    file_path = computed_columns_file if computed_columns_file else COMPUTED_COLUMNS_FILE
+    if file_path and file_path.exists():
+        with open(file_path, "r") as f:
             return json.load(f)
     return {}
 
@@ -74,24 +92,89 @@ def get_table_name_from_file(file_stem: str) -> str:
     return snake_case.lower()
 
 
-def generate_computed_columns(df: pl.DataFrame, table_name: str, logger=None) -> pl.DataFrame:
+def generate_computed_columns(
+    df: pl.DataFrame,
+    table_name: str,
+    tenant_config: Optional['TenantConfig'] = None,
+    logger=None
+) -> pl.DataFrame:
     """
     Generate computed columns for a dataframe before validation.
 
-    Reads computed column definitions from db/computed_columns.json and applies them.
-    This ensures columns are created before schema validation checks them.
-    Automatically casts to the correct Polars datatype as specified in the config.
+    Reads computed column definitions and applies them.
+    Supports both legacy and multi-tenant modes.
 
     Args:
         df: Input Polars DataFrame
         table_name: Database table name (e.g., 'fact_invoice_secondary')
+        tenant_config: Optional TenantConfig for multi-tenant mode
         logger: Optional logger instance
 
     Returns:
         DataFrame with computed columns added
     """
-    if table_name not in COMPUTED_COLUMNS_CONFIG:
+    # Determine which computed columns config to use
+    if tenant_config is not None:
+        # Multi-tenant mode: load from tenant-specific path
+        computed_cols_config = load_computed_columns_config(tenant_config.computed_columns_path)
+    else:
+        # Legacy mode: use global config
+        computed_cols_config = COMPUTED_COLUMNS_CONFIG
+
+    if table_name not in computed_cols_config:
         return df
+
+    def log(msg: str, level: str = "info"):
+        if logger:
+            getattr(logger, level)(msg)
+        else:
+            print(msg)
+
+    # Map datatype strings to Polars types
+    POLARS_TYPE_MAP = {
+        "Utf8": pl.Utf8,
+        "String": pl.Utf8,
+        "VARCHAR": pl.Utf8,
+        "Int32": pl.Int32,
+        "Int64": pl.Int64,
+        "INTEGER": pl.Int64,
+        "Double": pl.Float64,
+        "Float": pl.Float32,
+        "DOUBLE": pl.Float64,
+        "Boolean": pl.Boolean,
+    }
+
+    computed_cols = computed_cols_config[table_name]
+
+    for col_name, col_config in computed_cols.items():
+        col_type = col_config.get("type")
+        polars_type = col_config.get("polars_type", "Utf8")
+        target_dtype = POLARS_TYPE_MAP.get(polars_type, pl.Utf8)
+
+        if col_type == "concatenation":
+            # Handle concatenation of columns
+            cols_to_concat = col_config.get("columns", [])
+            separator = col_config.get("separator", "")
+
+            # Check if all required columns exist
+            missing_cols = [c for c in cols_to_concat if c not in df.columns]
+            if missing_cols:
+                log(f"⚠️  Cannot generate {col_name}: missing columns {missing_cols}", "warning")
+                continue
+
+            try:
+                # Concatenate columns with separator, replacing nulls with "NULL" string
+                # This ensures NULL values are represented as the string "NULL" instead of empty string
+                concat_expr = pl.concat_str(
+                    [pl.col(c).cast(pl.Utf8).fill_null("NULL") for c in cols_to_concat],
+                    separator=separator,
+                ).cast(target_dtype)
+                df = df.with_columns(concat_expr.alias(col_name))
+                log(f"✓ Generated computed column: {col_name} ({polars_type})", "info")
+            except Exception as e:
+                log(f"✗ Error generating {col_name}: {e}", "error")
+
+    return df
 
     def log(msg: str, level: str = "info"):
         if logger:
@@ -147,7 +230,10 @@ def generate_computed_columns(df: pl.DataFrame, table_name: str, logger=None) ->
 
 
 def validate_and_transform_dataframe(
-    df: pl.DataFrame, table_name: str, logger=None
+    df: pl.DataFrame,
+    table_name: str,
+    tenant_config: Optional['TenantConfig'] = None,
+    logger=None
 ) -> Tuple[pl.DataFrame, Dict]:
     """
     Transform and validate dataframe using column mappings.
@@ -194,6 +280,19 @@ def validate_and_transform_dataframe(
         "transformation_errors": [],
     }
 
+    # Determine paths and validator based on mode (tenant-aware or legacy)
+    if tenant_config is not None:
+        # Multi-tenant mode: use tenant-specific paths
+        column_mappings_dir = tenant_config.column_mappings_path
+        schemas_dir = tenant_config.schema_path
+        # Create tenant-specific validator
+        tenant_validator = SchemaValidator.from_schema_files(schemas_dir, column_mappings_dir)
+    else:
+        # Legacy mode: use global paths and validator
+        column_mappings_dir = COLUMN_MAPPINGS_DIR
+        tenant_validator = validator  # Use global validator
+
+
     log(f"🔄 Transforming columns for table: {table_name}")
 
     # Step 1: Map table names to their JSON mapping files
@@ -210,7 +309,7 @@ def validate_and_transform_dataframe(
     }
 
     # Step 1.5: Get schema column names from validator
-    schema_columns = validator.get_schema_columns(table_name)
+    schema_columns = tenant_validator.get_schema_columns(table_name)
     if not schema_columns:
         log(f"⚠️  Could not extract schema columns for {table_name}", "warning")
         schema_columns = set()
@@ -221,7 +320,7 @@ def validate_and_transform_dataframe(
     json_filename = mapping_files.get(table_name)
     mapping_data = {}  # Initialize here so it's accessible in Step 4.3
     if json_filename:
-        mapping_file = COLUMN_MAPPINGS_DIR / json_filename
+        mapping_file = column_mappings_dir / json_filename
         try:
             with open(mapping_file) as f:
                 mapping_data = json.load(f)
@@ -372,11 +471,11 @@ def validate_and_transform_dataframe(
     # Now that columns are renamed to snake_case (invoice_date, customer_code, etc),
     # we can safely generate computed columns that reference these renamed columns
     log(f"🔧 Generating computed columns for {table_name}...")
-    df = generate_computed_columns(df, table_name, logger)
+    df = generate_computed_columns(df, table_name, tenant_config, logger)
 
     # Step 5: DETECT OVERFLOWS AND TYPE MISMATCHES
     log(f"🔍 Checking for data type overflows and mismatches...")
-    overflows = validator.detect_data_overflows(df, table_name)
+    overflows = tenant_validator.detect_data_overflows(df, table_name)
 
     has_errors = False
     error_details = []
@@ -434,7 +533,7 @@ def validate_and_transform_dataframe(
 
     # Step 6: Validate against schema
     log(f"✓ Validating data against table schema: {table_name}")
-    is_valid, error_msg, transformed_df = validator.validate_dataframe_against_schema(
+    is_valid, error_msg, transformed_df = tenant_validator.validate_dataframe_against_schema(
         df, table_name
     )
 

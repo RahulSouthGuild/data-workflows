@@ -20,8 +20,11 @@ import uuid
 import requests
 import pymysql
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 from tqdm import tqdm
+
+if TYPE_CHECKING:
+    from orchestration.tenant_manager import TenantConfig
 
 
 class StarRocksStreamLoader:
@@ -37,25 +40,51 @@ class StarRocksStreamLoader:
     """
 
     def __init__(
-        self, config: Dict, logger=None, debug: bool = False, max_error_ratio: float = 0.0
+        self,
+        config: Dict = None,
+        tenant_config: Optional['TenantConfig'] = None,
+        logger=None,
+        debug: bool = False,
+        max_error_ratio: float = 0.0
     ):
         """
         Initialize Stream Loader with StarRocks configuration.
 
+        Supports both legacy (config dict) and multi-tenant (tenant_config) modes.
+
         Args:
-            config: StarRocks config dict with:
+            config: Optional StarRocks config dict with:
                 - host: StarRocks host
-                - port: MySQL port (3306)
+                - port: MySQL port (9030)
                 - http_port: HTTP port (8040)
                 - user: Username
                 - password: Password
                 - database: Database name
+            tenant_config: Optional TenantConfig for multi-tenant mode
             logger: Optional logger instance for logging output
             debug: Enable debug logging (default: False)
             max_error_ratio: Maximum error ratio (0.0 = strict/no errors, 1.0 = 100% tolerance)
                            (default: 0.0 for production safety)
+
+        Note: Either config or tenant_config must be provided.
         """
-        self.config = config
+        # Extract config from tenant_config if provided
+        if tenant_config is not None:
+            self.config = {
+                'host': tenant_config.database_host,
+                'port': tenant_config.database_port,
+                'http_port': tenant_config.database_http_port,
+                'user': tenant_config.database_user,
+                'password': tenant_config.database_password,
+                'database': tenant_config.database_name,
+            }
+            self.tenant_slug = tenant_config.tenant_slug
+        elif config is not None:
+            self.config = config
+            self.tenant_slug = None  # Legacy mode
+        else:
+            raise ValueError("Either config or tenant_config must be provided")
+        # self.config is now set above based on tenant_config or config parameter
         self.logger = logger
         self.debug = debug
 
