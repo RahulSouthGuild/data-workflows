@@ -115,8 +115,8 @@ async def main():
 
                 logger.info(f"Found {len(blob_paths)} blob(s) to process")
 
-                # Create output directory for raw parquets
-                output_dir = tenant_config.data_incremental_path / "raw_parquets"
+                # Create output directory for raw parquet (Bronze layer)
+                output_dir = tenant_config.data_incremental_raw_path
                 output_dir.mkdir(parents=True, exist_ok=True)
 
                 # Download and convert blobs to parquet

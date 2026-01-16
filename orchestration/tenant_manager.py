@@ -269,6 +269,38 @@ class TenantConfig:
         """Temporary data directory."""
         return self.data_base_path / "temp"
 
+    # Incremental data subdirectories
+    @property
+    def data_incremental_source_path(self) -> Path:
+        """Source files directory for incremental loads."""
+        return self.data_incremental_path / "source_files"
+
+    @property
+    def data_incremental_raw_path(self) -> Path:
+        """Raw parquet directory for incremental loads (Bronze layer)."""
+        return self.data_incremental_path / "raw_parquet"
+
+    @property
+    def data_incremental_cleaned_path(self) -> Path:
+        """Cleaned parquet directory for incremental loads (Silver layer)."""
+        return self.data_incremental_path / "cleaned_parquet"
+
+    # Historical data subdirectories
+    @property
+    def data_historical_source_path(self) -> Path:
+        """Source files directory for historical loads."""
+        return self.data_historical_path / "source_files"
+
+    @property
+    def data_historical_raw_path(self) -> Path:
+        """Raw parquet directory for historical loads (Bronze layer)."""
+        return self.data_historical_path / "raw_parquet"
+
+    @property
+    def data_historical_cleaned_path(self) -> Path:
+        """Cleaned parquet directory for historical loads (Silver layer)."""
+        return self.data_historical_path / "cleaned_parquet"
+
     # Log paths
     @property
     def logs_base_path(self) -> Path:
