@@ -5,12 +5,13 @@ Provides a single entry point for complete dimension table ETL pipeline:
 Extract → Transform → Clean → Validate → Load
 
 This module orchestrates the entire data flow using modular utilities.
+Supports both legacy (Config-based) and multi-tenant (tenant_config-based) modes.
 """
 
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 
 import polars as pl
 import pymysql
@@ -33,6 +34,9 @@ from core.transformers.transformation_engine import (  # noqa: E402
     validate_and_transform_dataframe,
 )
 
+if TYPE_CHECKING:
+    from orchestration.tenant_manager import TenantConfig
+
 logger = get_pipeline_logger(__name__)
 
 # Color codes
@@ -53,19 +57,46 @@ class ETLOrchestrator:
     3. CLEAN: Normalize data types and values
     4. VALIDATE: Check schema alignment
     5. LOAD: Stream Load into StarRocks
+
+    Supports both legacy and multi-tenant modes.
     """
 
-    def __init__(self):
-        """Initialize ETL orchestrator with StarRocks configuration."""
-        self.host = Config.STARROCKS_HOST
-        self.port = Config.STARROCKS_PORT
-        self.http_port = Config.STARROCKS_HTTP_PORT
-        self.user = Config.STARROCKS_USER
-        self.password = Config.STARROCKS_PASSWORD
-        self.database = Config.STARROCKS_DATABASE
-        self.timeout = Config.STREAM_LOAD_TIMEOUT
-        self.max_error_ratio = Config.MAX_ERROR_RATIO
-        self.chunk_size = Config.CHUNK_SIZE
+    def __init__(self, tenant_config: Optional['TenantConfig'] = None, logger=None):
+        """
+        Initialize ETL orchestrator.
+
+        Args:
+            tenant_config: Optional TenantConfig for multi-tenant mode
+            logger: Optional logger instance
+
+        If tenant_config is provided, uses tenant-specific configuration.
+        Otherwise, falls back to shared Config (legacy mode).
+        """
+        self.tenant_config = tenant_config
+        self.logger = logger if logger else get_pipeline_logger(__name__)
+
+        if tenant_config is not None:
+            # Multi-tenant mode: use tenant-specific config
+            self.host = tenant_config.database_host
+            self.port = tenant_config.database_port
+            self.http_port = tenant_config.database_http_port
+            self.user = tenant_config.database_user
+            self.password = tenant_config.database_password
+            self.database = tenant_config.database_name
+            self.timeout = tenant_config.stream_load_timeout
+            self.max_error_ratio = tenant_config.max_error_ratio
+            self.chunk_size = tenant_config.chunk_size
+        else:
+            # Legacy mode: use shared Config
+            self.host = Config.STARROCKS_HOST
+            self.port = Config.STARROCKS_PORT
+            self.http_port = Config.STARROCKS_HTTP_PORT
+            self.user = Config.STARROCKS_USER
+            self.password = Config.STARROCKS_PASSWORD
+            self.database = Config.STARROCKS_DATABASE
+            self.timeout = Config.STREAM_LOAD_TIMEOUT
+            self.max_error_ratio = Config.MAX_ERROR_RATIO
+            self.chunk_size = Config.CHUNK_SIZE
 
     def get_starrocks_connection(self):
         """Create MySQL connection to StarRocks for metadata operations."""
@@ -169,7 +200,9 @@ class ETLOrchestrator:
             logger.info(f"{CYAN}[TRANSFORM] Mapping columns for {table_name}...{RESET}")
 
             # Use centralized transformation engine
-            transformed_df, metadata = validate_and_transform_dataframe(df, table_name, logger)
+            transformed_df, metadata = validate_and_transform_dataframe(
+                df, table_name, self.tenant_config, logger
+            )
 
             # Extract column mapping from metadata for compatibility
             mapping = {col: col for col in transformed_df.columns}
@@ -204,8 +237,6 @@ class ETLOrchestrator:
             Cleaned DataFrame or None if error
         """
         try:
-            logger.info(f"{CYAN}[CLEAN] Normalizing data types for {table_name}...{RESET}")
-
             # Get database column types
             db_columns = self.get_table_columns(table_name)
             if not db_columns:
@@ -214,10 +245,9 @@ class ETLOrchestrator:
                 )
                 return df
 
-            # Apply type conversions
+            # Apply type conversions (logging handled internally)
             df = apply_type_conversions(df, db_columns, table_name, logger)
 
-            logger.info(f"{GREEN}✓ Data cleaning complete{RESET}")
             return df
 
         except Exception as e:
@@ -241,8 +271,6 @@ class ETLOrchestrator:
             True if validation passes, False otherwise
         """
         try:
-            logger.info(f"{CYAN}[VALIDATE] Checking schema alignment for {table_name}...{RESET}")
-
             # Get database columns
             db_columns = self.get_table_columns(table_name)
             if not db_columns:
@@ -257,9 +285,9 @@ class ETLOrchestrator:
                 )
                 return False
 
+            # Validation passed - only log summary
             logger.info(
-                f"{GREEN}✓ Schema validation passed: "
-                f"{len(df.columns)} columns, {len(df):,} rows{RESET}"
+                f"{GREEN}✓ Validation passed: {len(df.columns)} columns, {len(df):,} rows{RESET}"
             )
             return True
 
@@ -284,14 +312,37 @@ class ETLOrchestrator:
             Tuple of (success_bool, result_dict)
         """
         try:
-            logger.info(f"{CYAN}[LOAD] Starting Stream Load for {table_name}...{RESET}")
+            # CRITICAL: Get database column order and reorder DataFrame to match
+            db_columns = self.get_table_columns(table_name)
+            if not db_columns:
+                logger.error(f"{RED}[LOAD] Could not fetch database columns{RESET}")
+                return False, {"error": "Could not fetch database columns"}
+
+            # Filter to only columns that exist in both DataFrame and database
+            db_col_names = list(db_columns.keys())
+            df_col_names = df.columns
+
+            # Find columns in DataFrame that exist in database
+            valid_columns = [col for col in db_col_names if col in df_col_names]
+
+            # Find missing columns - only warn if there are any
+            missing_in_df = [col for col in db_col_names if col not in df_col_names]
+            extra_in_df = [col for col in df_col_names if col not in db_col_names]
+
+            if missing_in_df:
+                logger.warning(f"{YELLOW}Columns in DB but not in DataFrame: {', '.join(missing_in_df[:5])}{RESET}")
+            if extra_in_df:
+                logger.warning(f"{YELLOW}Columns in DataFrame but not in DB: {', '.join(extra_in_df[:5])}{RESET}")
+
+            # Reorder DataFrame to match database column order
+            df = df.select(valid_columns)
 
             total_rows = len(df)
             num_chunks = (total_rows + self.chunk_size - 1) // self.chunk_size
 
             if num_chunks > 1:
                 logger.info(
-                    f"{CYAN}Processing {num_chunks} chunks ({self.chunk_size:,} rows each){RESET}"
+                    f"{CYAN}Loading {total_rows:,} rows in {num_chunks} chunks...{RESET}"
                 )
 
             total_loaded = 0
@@ -304,12 +355,12 @@ class ETLOrchestrator:
                 chunk_df = df[start_idx:end_idx]
                 chunk_label = f"{table_name}_{int(time.time())}_{i}"
 
-                # Save chunk to CSV with SOH delimiter
+                # Save chunk to CSV with SOH delimiter (columns now in DB order)
                 import tempfile  # noqa: F401, E402
 
                 with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
                     csv_path = Path(f.name)
-                    chunk_df.write_csv(csv_path, separator="\x01")
+                    chunk_df.write_csv(csv_path, separator="\x01", include_header=False)
 
                 # Stream Load this chunk
                 success, result = self._stream_load_chunk(table_name, csv_path, chunk_label)
@@ -324,12 +375,14 @@ class ETLOrchestrator:
                     filtered = result.get("NumberFilteredRows", 0)
                     total_failed += filtered
 
-                # Show progress
-                progress = f"Chunk {i+1}/{num_chunks}"
-                if success:
-                    logger.info(f"{GREEN}✓ {progress} loaded {end_idx - start_idx:,} rows{RESET}")
-                else:
-                    logger.warning(f"{YELLOW}⚠ {progress} filtered {total_failed:,} rows{RESET}")
+                # Only log failures or every 10th chunk for large jobs
+                if not success:
+                    logger.warning(f"{YELLOW}⚠ Chunk {i+1}/{num_chunks} filtered {total_failed:,} rows{RESET}")
+                elif num_chunks > 10 and (i + 1) % 10 == 0:
+                    logger.info(f"{GREEN}✓ Progress: {i+1}/{num_chunks} chunks loaded{RESET}")
+                elif num_chunks <= 3:
+                    # For small jobs (≤3 chunks), show each chunk
+                    logger.info(f"{GREEN}✓ Chunk {i+1}/{num_chunks} loaded {end_idx - start_idx:,} rows{RESET}")
 
             # Summary
             logger.info(
@@ -437,7 +490,29 @@ class ETLOrchestrator:
         try:
             # Load schema if not provided
             if schema is None:
-                schema, actual_table_name = get_schema_for_parquet_file(parquet_path.name)
+                # Try tenant-specific mappings first, then fall back to shared
+                mappings_dir = None
+                if self.tenant_config:
+                    tenant_mappings = self.tenant_config.column_mappings_path
+                    if tenant_mappings.exists():
+                        # Check if there are actual mapping files (not just __init__.py)
+                        mapping_files = [f for f in tenant_mappings.glob("*.json")]
+                        if mapping_files:
+                            mappings_dir = tenant_mappings
+                            logger.info(f"{GREEN}Using tenant-specific column mappings from {mappings_dir}{RESET}")
+
+                # If no tenant mappings, use shared
+                if mappings_dir is None:
+                    logger.info(f"{YELLOW}Using shared column mappings (tenant-specific not found){RESET}")
+
+                # Use explicit table_name if provided, otherwise infer from filename
+                from utils.schema_loader import get_schema_for_table
+                schema = get_schema_for_table(table_name, mappings_dir)
+
+                # If not found, try inferring from filename
+                if not schema:
+                    schema, actual_table_name = get_schema_for_parquet_file(parquet_path.name, mappings_dir)
+
                 if not schema:
                     raise Exception(f"Could not load schema for {table_name}")
 

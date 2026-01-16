@@ -47,7 +47,7 @@ tenants:
     storage_provider: "azure"               # azure, aws, gcp, minio, local
     storage_config:
       # Azure-specific settings
-      container_name: "synapsetaprod"
+      container_name: "synapsedataprod"
       folder_prefix: "synapse_data/"
 
       # Authentication method: connection_string, sas_token, or service_principal

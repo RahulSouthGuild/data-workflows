@@ -21,6 +21,7 @@ from typing import Dict, Tuple, Optional, TYPE_CHECKING
 from datetime import datetime
 
 import polars as pl
+from tqdm import tqdm
 
 if TYPE_CHECKING:
     from orchestration.tenant_manager import TenantConfig
@@ -115,8 +116,12 @@ def generate_computed_columns(
     """
     # Determine which computed columns config to use
     if tenant_config is not None:
-        # Multi-tenant mode: load from tenant-specific path
+        # Multi-tenant mode: try tenant-specific first, fallback to shared
         computed_cols_config = load_computed_columns_config(tenant_config.computed_columns_path)
+
+        # Fallback to shared config if tenant-specific doesn't have this table
+        if table_name not in computed_cols_config:
+            computed_cols_config = COMPUTED_COLUMNS_CONFIG
     else:
         # Legacy mode: use global config
         computed_cols_config = COMPUTED_COLUMNS_CONFIG
@@ -145,6 +150,8 @@ def generate_computed_columns(
     }
 
     computed_cols = computed_cols_config[table_name]
+    generated_cols = []
+    failed_cols = []
 
     for col_name, col_config in computed_cols.items():
         col_type = col_config.get("type")
@@ -159,7 +166,7 @@ def generate_computed_columns(
             # Check if all required columns exist
             missing_cols = [c for c in cols_to_concat if c not in df.columns]
             if missing_cols:
-                log(f"⚠️  Cannot generate {col_name}: missing columns {missing_cols}", "warning")
+                failed_cols.append(f"{col_name} (missing: {', '.join(missing_cols)})")
                 continue
 
             try:
@@ -170,61 +177,17 @@ def generate_computed_columns(
                     separator=separator,
                 ).cast(target_dtype)
                 df = df.with_columns(concat_expr.alias(col_name))
-                log(f"✓ Generated computed column: {col_name} ({polars_type})", "info")
+                generated_cols.append(col_name)
             except Exception as e:
-                log(f"✗ Error generating {col_name}: {e}", "error")
+                failed_cols.append(f"{col_name} ({str(e)})")
 
-    return df
-
-    def log(msg: str, level: str = "info"):
-        if logger:
-            getattr(logger, level)(msg)
-        else:
-            print(msg)
-
-    # Map datatype strings to Polars types
-    POLARS_TYPE_MAP = {
-        "Utf8": pl.Utf8,
-        "String": pl.Utf8,
-        "VARCHAR": pl.Utf8,
-        "Int32": pl.Int32,
-        "Int64": pl.Int64,
-        "INTEGER": pl.Int64,
-        "Double": pl.Float64,
-        "Float": pl.Float32,
-        "DOUBLE": pl.Float64,
-        "Boolean": pl.Boolean,
-    }
-
-    computed_cols = COMPUTED_COLUMNS_CONFIG[table_name]
-
-    for col_name, col_config in computed_cols.items():
-        col_type = col_config.get("type")
-        polars_type = col_config.get("polars_type", "Utf8")
-        target_dtype = POLARS_TYPE_MAP.get(polars_type, pl.Utf8)
-
-        if col_type == "concatenation":
-            # Handle concatenation of columns
-            cols_to_concat = col_config.get("columns", [])
-            separator = col_config.get("separator", "")
-
-            # Check if all required columns exist
-            missing_cols = [c for c in cols_to_concat if c not in df.columns]
-            if missing_cols:
-                log(f"⚠️  Cannot generate {col_name}: missing columns {missing_cols}", "warning")
-                continue
-
-            try:
-                # Concatenate columns with separator, replacing nulls with "NULL" string
-                # This ensures NULL values are represented as the string "NULL" instead of empty string
-                concat_expr = pl.concat_str(
-                    [pl.col(c).cast(pl.Utf8).fill_null("NULL") for c in cols_to_concat],
-                    separator=separator,
-                ).cast(target_dtype)
-                df = df.with_columns(concat_expr.alias(col_name))
-                log(f"✓ Generated computed column: {col_name} ({polars_type})", "info")
-            except Exception as e:
-                log(f"✗ Error generating {col_name}: {e}", "error")
+    # Log summary instead of individual columns
+    if generated_cols:
+        log(f"✓ Generated {len(generated_cols)} computed column(s): {', '.join(generated_cols)}", "info")
+    if failed_cols:
+        log(f"⚠️  Failed to generate {len(failed_cols)} computed column(s):", "warning")
+        for failed in failed_cols:
+            log(f"  - {failed}", "warning")
 
     return df
 
@@ -282,18 +245,34 @@ def validate_and_transform_dataframe(
 
     # Determine paths and validator based on mode (tenant-aware or legacy)
     if tenant_config is not None:
-        # Multi-tenant mode: use tenant-specific paths
-        column_mappings_dir = tenant_config.column_mappings_path
-        schemas_dir = tenant_config.schema_path
-        # Create tenant-specific validator
-        tenant_validator = SchemaValidator.from_schema_files(schemas_dir, column_mappings_dir)
+        # Multi-tenant mode: try tenant-specific paths, fallback to shared
+        tenant_schemas_dir = tenant_config.schema_path
+        tenant_mappings_dir = tenant_config.column_mappings_path
+
+        # Check if tenant-specific schemas exist (exclude __init__.py files)
+        has_schema_files = False
+        if tenant_schemas_dir.exists():
+            schema_files = [f for f in tenant_schemas_dir.rglob("*.py") if f.name != "__init__.py"]
+            has_schema_files = len(schema_files) > 0
+
+        if has_schema_files:
+            # Use tenant-specific schemas
+            column_mappings_dir = tenant_mappings_dir
+            schemas_dir = tenant_schemas_dir
+            tenant_validator = SchemaValidator.from_schema_files(schemas_dir, column_mappings_dir)
+            log(f"Using tenant-specific schemas from {schemas_dir}")
+        else:
+            # Fallback to shared schemas
+            column_mappings_dir = COLUMN_MAPPINGS_DIR
+            tenant_validator = validator  # Use global validator
+            log(f"Tenant-specific schemas not found, using shared schemas from {SCHEMAS_DIR}")
     else:
         # Legacy mode: use global paths and validator
         column_mappings_dir = COLUMN_MAPPINGS_DIR
         tenant_validator = validator  # Use global validator
 
 
-    log(f"🔄 Transforming columns for table: {table_name}")
+    log(f"🔄 Transforming data for table: {table_name}")
 
     # Step 1: Map table names to their JSON mapping files
     mapping_files = {
@@ -391,13 +370,11 @@ def validate_and_transform_dataframe(
 
                 if existing_renames:
                     log(f"✓ Renaming {len(existing_renames)} columns using column mappings")
-                    # Show first 5 mappings
-                    for orig, mapped in sorted(list(existing_renames.items())[:5]):
-                        log(f"  {orig:40} → {mapped}")
-                    if len(existing_renames) > 5:
-                        log(f"  ... and {len(existing_renames) - 5} more")
-                    df = df.rename(existing_renames)
-                    log(f"✓ Column transformation complete")
+                    # Use tqdm for progress instead of logging each column
+                    with tqdm(total=len(existing_renames), desc="Column renaming", unit="cols", leave=False, disable=logger is None) as pbar:
+                        df = df.rename(existing_renames)
+                        pbar.update(len(existing_renames))
+                    log(f"✓ Column transformation complete ({len(existing_renames)} columns renamed)")
                 else:
                     log(f"⚠️  No columns found to rename", "warning")
         except FileNotFoundError:
@@ -413,39 +390,50 @@ def validate_and_transform_dataframe(
     if json_filename and mapping_file.exists():
         try:
             type_conversions = []
-            for parquet_col, col_info in mapping_data.get("columns", {}).items():
-                db_col = col_info.get("db_column", parquet_col)
-                data_type = col_info.get("data_type", "").upper()
+            conversion_errors = []
+            columns_to_convert = mapping_data.get("columns", {})
 
-                # Only convert columns that exist in the dataframe
-                if db_col in df.columns:
-                    # Check if conversion is needed
-                    current_type = str(df[db_col].dtype)
+            # Use tqdm for progress
+            with tqdm(total=len(columns_to_convert), desc="Type conversions", unit="cols", leave=False, disable=logger is None) as pbar:
+                for parquet_col, col_info in columns_to_convert.items():
+                    db_col = col_info.get("db_column", parquet_col)
+                    data_type = col_info.get("data_type", "").upper()
 
-                    # Handle INTEGER/SMALLINT columns that are strings
-                    if "INTEGER" in data_type or "SMALLINT" in data_type:
-                        if "String" in current_type or "Utf8" in current_type:
-                            try:
-                                df = df.with_columns(pl.col(db_col).cast(pl.Int32))
-                                type_conversions.append(f"{db_col} (String→Int32)")
-                            except Exception as e:
-                                log(f"⚠️  Could not convert {db_col} to Int32: {e}", "warning")
+                    # Only convert columns that exist in the dataframe
+                    if db_col in df.columns:
+                        # Check if conversion is needed
+                        current_type = str(df[db_col].dtype)
 
-                    # Handle DOUBLE/FLOAT columns that are strings
-                    elif "DOUBLE" in data_type or "FLOAT" in data_type:
-                        if "String" in current_type or "Utf8" in current_type:
-                            try:
-                                df = df.with_columns(pl.col(db_col).cast(pl.Float64))
-                                type_conversions.append(f"{db_col} (String→Float64)")
-                            except Exception as e:
-                                log(f"⚠️  Could not convert {db_col} to Float64: {e}", "warning")
+                        # Handle INTEGER/SMALLINT columns that are strings
+                        if "INTEGER" in data_type or "SMALLINT" in data_type:
+                            if "String" in current_type or "Utf8" in current_type:
+                                try:
+                                    df = df.with_columns(pl.col(db_col).cast(pl.Int32))
+                                    type_conversions.append(f"{db_col} (String→Int32)")
+                                except Exception as e:
+                                    conversion_errors.append(f"{db_col}: {e}")
+
+                        # Handle DOUBLE/FLOAT columns that are strings
+                        elif "DOUBLE" in data_type or "FLOAT" in data_type:
+                            if "String" in current_type or "Utf8" in current_type:
+                                try:
+                                    df = df.with_columns(pl.col(db_col).cast(pl.Float64))
+                                    type_conversions.append(f"{db_col} (String→Float64)")
+                                except Exception as e:
+                                    conversion_errors.append(f"{db_col}: {e}")
+
+                    pbar.update(1)
 
             if type_conversions:
                 log(f"✓ Applied type conversions for {len(type_conversions)} columns")
-                for conversion in type_conversions[:5]:
-                    log(f"  {conversion}")
-                if len(type_conversions) > 5:
-                    log(f"  ... and {len(type_conversions) - 5} more")
+
+            # Only log errors if there are any
+            if conversion_errors:
+                log(f"⚠️  Type conversion errors for {len(conversion_errors)} columns:", "warning")
+                for error in conversion_errors[:3]:
+                    log(f"  {error}", "warning")
+                if len(conversion_errors) > 3:
+                    log(f"  ... and {len(conversion_errors) - 3} more errors", "warning")
         except Exception as e:
             log(f"⚠️  Could not apply type conversions: {e}", "warning")
 
@@ -474,7 +462,6 @@ def validate_and_transform_dataframe(
     df = generate_computed_columns(df, table_name, tenant_config, logger)
 
     # Step 5: DETECT OVERFLOWS AND TYPE MISMATCHES
-    log(f"🔍 Checking for data type overflows and mismatches...")
     overflows = tenant_validator.detect_data_overflows(df, table_name)
 
     has_errors = False
@@ -483,20 +470,24 @@ def validate_and_transform_dataframe(
     # Check for type mismatches (STRICT - throw error)
     if overflows.get("type_mismatches"):
         has_errors = True
-        log(f"❌ DATA TYPE MISMATCH ERRORS:", "error")
-        for mismatch in overflows["type_mismatches"]:
+        log(f"❌ Type mismatch errors found ({len(overflows['type_mismatches'])} columns)", "error")
+        for mismatch in overflows["type_mismatches"][:3]:
             error_msg = f"Column '{mismatch['column']}': Expected {mismatch['schema_type']}, got {mismatch['data_type']}"
             log(f"  ✗ {error_msg}", "error")
             error_details.append(error_msg)
+        if len(overflows["type_mismatches"]) > 3:
+            log(f"  ... and {len(overflows['type_mismatches']) - 3} more", "error")
 
     # Check for numeric overflow (STRICT - throw error)
     if overflows.get("numeric_overflows"):
         has_errors = True
-        log(f"❌ NUMERIC VALUE OVERFLOW ERRORS:", "error")
-        for overflow in overflows["numeric_overflows"]:
+        log(f"❌ Numeric overflow errors found ({len(overflows['numeric_overflows'])} columns)", "error")
+        for overflow in overflows["numeric_overflows"][:3]:
             error_msg = f"Column '{overflow['column']}' ({overflow['schema_type']}): Data range [{overflow['min']}, {overflow['max']}] exceeds type range {overflow['range']}"
             log(f"  ✗ {error_msg}", "error")
             error_details.append(error_msg)
+        if len(overflows["numeric_overflows"]) > 3:
+            log(f"  ... and {len(overflows['numeric_overflows']) - 3} more", "error")
 
     # Throw error if type mismatches or numeric overflows detected
     if has_errors:
@@ -506,12 +497,14 @@ def validate_and_transform_dataframe(
 
     # Check for VARCHAR overflow (AUTO-FIX with ALTER)
     if overflows.get("varchar_overflows"):
-        log(f"⚠️  VARCHAR OVERFLOW DETECTED - Auto-fixing with ALTER TABLE", "warning")
-        for overflow in overflows["varchar_overflows"]:
+        log(f"⚠️  VARCHAR overflow detected ({len(overflows['varchar_overflows'])} columns)", "warning")
+        for overflow in overflows["varchar_overflows"][:3]:
             col_name = overflow["column"]
             old_size = overflow["schema_size"]
             new_size = overflow["recommended_size"]
-            log(f"  Column '{col_name}': VARCHAR({old_size}) → VARCHAR({new_size})", "warning")
+            log(f"  {col_name}: VARCHAR({old_size}) → VARCHAR({new_size})", "warning")
+        if len(overflows["varchar_overflows"]) > 3:
+            log(f"  ... and {len(overflows['varchar_overflows']) - 3} more", "warning")
 
             # Log overflow
             overflow_log = (
@@ -531,8 +524,10 @@ def validate_and_transform_dataframe(
                 }
             )
 
+    # Step 5.5: Generate computed columns (BEFORE validation) - DUPLICATE, already done above
+    # df = generate_computed_columns(df, table_name, tenant_config, logger)
+
     # Step 6: Validate against schema
-    log(f"✓ Validating data against table schema: {table_name}")
     is_valid, error_msg, transformed_df = tenant_validator.validate_dataframe_against_schema(
         df, table_name
     )
@@ -542,7 +537,7 @@ def validate_and_transform_dataframe(
         log(f"{error_msg}", "error")
         raise ValueError(error_msg)
 
-    log(f"✓ Validation passed for {table_name}")
+    log(f"✓ Validation passed ({len(transformed_df)} rows, {len(transformed_df.columns)} columns)")
 
     # Update metadata
     metadata["rows_after"] = len(transformed_df)

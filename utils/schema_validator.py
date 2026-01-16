@@ -195,9 +195,7 @@ class SchemaValidator:
                 data_type = mapping_info.get("data_type")
 
                 if db_column and data_type:
-                    print(
-                        f"{GREEN}✓ Using mapping: {parquet_col_name} → {db_column} ({data_type}){RESET}"
-                    )
+                    # Removed verbose logging - mappings are successful by default
                     return (db_column, data_type)
 
         # Step 2: Try exact lookup in schema
@@ -423,8 +421,6 @@ class SchemaValidator:
                 t in expected_type.upper()
                 for t in ["TINYINT", "SMALLINT", "INT", "BIGINT", "LARGEINT"]
             ):
-                print(f"{CYAN}Converting {col_name} from string to integer (data cleaning){RESET}")
-
                 # Convert string to integer, handling empty strings and nulls
                 converted_df = df.with_columns(
                     [
@@ -447,17 +443,15 @@ class SchemaValidator:
                             f"Too many conversion failures for {col_name}: {failed_conversions} out of {len(df)} rows ({failure_rate:.1%})"
                         )
                     else:
+                        # Only log warnings for failures
                         print(
                             f"{YELLOW}Warning: {failed_conversions} values in {col_name} could not be converted to integer (set to null){RESET}"
                         )
 
-                print(f"{GREEN}Successfully converted {col_name} to integer{RESET}")
                 return converted_df
 
             # Float conversions
             elif any(t in expected_type.upper() for t in ["FLOAT", "DOUBLE", "DECIMAL"]):
-                print(f"{CYAN}Converting {col_name} from string to float (data cleaning){RESET}")
-
                 converted_df = df.with_columns(
                     [
                         pl.col(col_name)
@@ -479,16 +473,15 @@ class SchemaValidator:
                             f"Too many conversion failures for {col_name}: {failed_conversions} out of {len(df)} rows ({failure_rate:.1%})"
                         )
                     else:
+                        # Only log warnings for failures
                         print(
                             f"{YELLOW}Warning: {failed_conversions} values in {col_name} could not be converted to float (set to null){RESET}"
                         )
 
-                print(f"{GREEN}Successfully converted {col_name} to float{RESET}")
                 return converted_df
 
             # Date/DateTime conversions
             elif "DATE" in expected_type.upper():
-                print(f"{CYAN}Converting {col_name} from string to date (data cleaning){RESET}")
 
                 # Try multiple date formats
                 date_formats = ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y%m%d", "%Y-%m-%d %H:%M:%S"]

@@ -34,7 +34,7 @@ storage_provider: "azure"
 
 storage_config:
   # Azure Blob Storage settings
-  container_name: "synapsetaprod"
+  container_name: "synapsedataprod"
   folder_prefix: "synapse_data/"
 
   # Authentication: sas_token

@@ -60,9 +60,6 @@ async def download_blob(
         True if successful, False otherwise
     """
     try:
-        if logger:
-            logger.info(f"📥 Downloading blob: {blob_path}")
-
         blob = container.get_blob_client(blob_path)
         content = await (await blob.download_blob()).readall()
 
@@ -70,9 +67,6 @@ async def download_blob(
 
         async with aiofiles.open(output_path, "wb") as f:
             await f.write(content)
-
-        if logger:
-            logger.info(f"{GREEN}✓ Downloaded to {output_path}{RESET}")
 
         return True
 
@@ -98,9 +92,6 @@ async def decompress_gzip(
         True if successful, False otherwise
     """
     try:
-        if logger:
-            logger.info("🔄 Decompressing gzip file...")
-
         async with aiofiles.open(input_path, "rb") as f:
             content = await f.read()
 
@@ -108,9 +99,6 @@ async def decompress_gzip(
 
         async with aiofiles.open(output_path, "wb") as f:
             await f.write(decompressed)
-
-        if logger:
-            logger.info(f"{GREEN}✓ Decompressed to {output_path}{RESET}")
 
         return True
 
@@ -143,9 +131,6 @@ async def csv_to_parquet(
         - Filters to records after 2023-03-31
     """
     try:
-        if logger:
-            logger.info(f"🔄 Converting CSV to Parquet: {csv_path}")
-
         # Scan CSV with lazy loading
         df_stream = pl.scan_csv(
             csv_path,
@@ -156,18 +141,12 @@ async def csv_to_parquet(
 
         # Apply table-specific transformations
         if "FactInvoiceSecondary" in table_stem:
-            if logger:
-                logger.info("  📊 Applying FactInvoiceSecondary filters...")
-
             df_stream = df_stream.with_columns(pl.col("invoicedate").cast(pl.Int32)).filter(
                 pl.col("invoicedate") > 20230331
             )
 
         parquet_path.parent.mkdir(parents=True, exist_ok=True)
         df_stream.sink_parquet(parquet_path, row_group_size=PARQUET_ROW_GROUP_SIZE)
-
-        if logger:
-            logger.info(f"{GREEN}✓ Parquet file saved to {parquet_path}{RESET}")
 
         return True
 
@@ -233,9 +212,6 @@ async def process_blob_with_retry(
         if raw_file_path.exists():
             raw_file_path.unlink()
 
-        if logger:
-            logger.info(f"{GREEN}✅ Blob processed successfully{RESET}")
-
         return parquet_path
 
     except Exception as e:
@@ -287,10 +263,9 @@ async def process_blobs_sequentially(
     }
 
     for i, blob_path in enumerate(blob_paths, 1):
-        if logger:
-            logger.info(f"\n{'='*80}")
-            logger.info(f"[{i}/{len(blob_paths)}] Processing: {blob_path}")
-            logger.info(f"{'='*80}")
+        # Only log for first and every 5th blob for large jobs
+        if logger and (i == 1 or i % 5 == 0 or i == len(blob_paths)):
+            logger.info(f"Processing blob {i}/{len(blob_paths)}: {blob_path.split('/')[-1]}")
 
         # Extract table stem from blob path for special handling
         table_stem = blob_path.split("/")[1] if "/" in blob_path else ""
@@ -307,11 +282,9 @@ async def process_blobs_sequentially(
             results["results"][blob_path] = None
 
     if logger:
-        logger.info(f"\n{'='*80}")
         logger.info(
-            f"📊 Blob Processing Summary: {len(results['successful'])} successful, "
-            f"{len(results['failed'])} failed"
+            f"{GREEN}✓ Blob processing complete: {len(results['successful'])} successful, "
+            f"{len(results['failed'])} failed{RESET}"
         )
-        logger.info(f"{'='*80}")
 
     return results

@@ -35,9 +35,6 @@ def validate_schema_alignment(
         Dictionary with validation results and aligned DataFrame
     """
     try:
-        if logger:
-            logger.info(f"🔍 Validating schema alignment for {table_name}...")
-
         # Get the schema entry for this table
         schema_entry = schema_info.get(table_name, {})
 
@@ -72,27 +69,24 @@ def validate_schema_alignment(
             "dataframe": df,
         }
 
-        # Add missing columns with NULL values
+        # Add missing columns with NULL values - only warn
         if missing_in_df:
             missing_names = [schema_columns_lower[col] for col in missing_in_df]
             if logger:
                 logger.warning(
-                    f"{YELLOW}⚠️  Adding {len(missing_names)} missing columns: {missing_names}{RESET}"
+                    f"{YELLOW}⚠️  Adding {len(missing_names)} missing columns{RESET}"
                 )
             df = df.with_columns([pl.lit(None).alias(col) for col in missing_names])
 
-        # Remove extra columns
+        # Remove extra columns - only warn
         if extra_columns_actual:
             if logger:
                 logger.warning(
-                    f"{YELLOW}⚠️  Removing {len(extra_columns_actual)} extra columns: {set(extra_columns_actual)}{RESET}"
+                    f"{YELLOW}⚠️  Removing {len(extra_columns_actual)} extra columns{RESET}"
                 )
             df = df.drop(list(extra_columns_actual))
 
         results["dataframe"] = df
-
-        if logger:
-            logger.info(f"{GREEN}✓ Schema alignment complete - {len(df.columns)} columns{RESET}")
 
         return results
 
@@ -120,9 +114,6 @@ def apply_type_conversions(
         DataFrame with converted types
     """
     try:
-        if logger:
-            logger.info(f"🔄 Applying type conversions for {table_name}...")
-
         file_schema = schema_info.get(table_name, {})
 
         for column, info in file_schema.items():
@@ -156,9 +147,6 @@ def apply_type_conversions(
             elif data_type in ["str", "string", "varchar"]:
                 df = df.with_columns(pl.col(new_name).cast(pl.Utf8).alias(new_name))
 
-        if logger:
-            logger.info(f"{GREEN}✓ Type conversions complete{RESET}")
-
         return df
 
     except Exception as e:
@@ -182,9 +170,6 @@ def apply_dim_dealer_etl(df: pl.DataFrame, logger: Optional[logging.Logger] = No
         Transformed DataFrame
     """
     try:
-        if logger:
-            logger.info("🔄 Applying ETL enhancements for DimDealerMaster...")
-
         # 1. COALESCE logic for DealerGroupCode
         df = df.with_columns(
             [
@@ -194,16 +179,10 @@ def apply_dim_dealer_etl(df: pl.DataFrame, logger: Optional[logging.Logger] = No
             ]
         )
 
-        if logger:
-            logger.info(f"{GREEN}  ✓ Applied COALESCE for DealerGroupCode{RESET}")
-
         # 2. Build dealer mapping from active dealers
         dealer_mapping = {}
         total_rows = df.height
         chunk_size = 50000
-
-        if logger:
-            logger.info(f"{CYAN}  📋 Creating dealer mapping from {total_rows:,} rows...{RESET}")
 
         for i in range(0, total_rows, chunk_size):
             chunk = df.slice(i, chunk_size)
@@ -212,14 +191,8 @@ def apply_dim_dealer_etl(df: pl.DataFrame, logger: Optional[logging.Logger] = No
                 if row.get("ActiveFlag") == "True" and row.get("DealerCode"):
                     dealer_mapping[row["DealerCode"]] = row.get("DealerName")
 
-            if logger:
-                processed = min(i + chunk_size, total_rows)
-                logger.info(f"{CYAN}     Processed {processed:,}/{total_rows:,}{RESET}")
-
         if logger:
-            logger.info(
-                f"{GREEN}  ✓ Created mapping with {len(dealer_mapping):,} active dealers{RESET}"
-            )
+            logger.info(f"{GREEN}✓ DimDealerMaster ETL: {len(dealer_mapping):,} active dealers mapped{RESET}")
 
         # 3. Apply the CASE logic for DealerGroupName
         def get_dealer_group_name(dealer_group_code, dealer_code, dealer_name):
@@ -240,9 +213,6 @@ def apply_dim_dealer_etl(df: pl.DataFrame, logger: Optional[logging.Logger] = No
                 .alias("DealerGroupName")
             ]
         )
-
-        if logger:
-            logger.info(f"{GREEN}✓ ETL enhancements complete for DimDealerMaster{RESET}")
 
         return df
 
@@ -267,9 +237,6 @@ def apply_dim_customer_normalization(
         Normalized DataFrame
     """
     try:
-        if logger:
-            logger.info("🔄 Applying normalization for DimCustomerMaster (TsiTerritoryName)...")
-
         # Note: This operation is typically done at DB level via SQL
         # For Polars, we use regex_replace equivalent
         if "TsiTerritoryName" in df.columns:
@@ -280,9 +247,6 @@ def apply_dim_customer_normalization(
                 .str.replace_all(r"\s+", " ")
                 .alias("TsiTerritoryName")
             )
-
-            if logger:
-                logger.info(f"{GREEN}✓ TsiTerritoryName normalization complete{RESET}")
 
         return df
 
@@ -363,9 +327,6 @@ def transform_dataframe(
     """
     try:
         initial_count = df.height
-        if logger:
-            logger.info(f"🔄 Transforming dataframe for {table_name}...")
-            logger.info(f"   📈 Records before transformation: {initial_count:,}")
 
         # Step 1: Schema validation and alignment
         validation = validate_schema_alignment(df, schema_info, table_name, logger)
@@ -382,16 +343,10 @@ def transform_dataframe(
             df = apply_dim_customer_normalization(df, logger)
 
         final_count = df.height
-        if logger:
-            logger.info(f"   📊 Records after transformation: {final_count:,}")
-
-            if initial_count != final_count:
-                logger.warning(
-                    f"{YELLOW}⚠️  Record count changed: "
-                    f"{initial_count:,} -> {final_count:,}{RESET}"
-                )
-            else:
-                logger.info(f"{GREEN}✓ Transformation complete - {final_count:,} records{RESET}")
+        if logger and initial_count != final_count:
+            logger.warning(
+                f"{YELLOW}⚠️  Record count changed: {initial_count:,} → {final_count:,}{RESET}"
+            )
 
         return df
 

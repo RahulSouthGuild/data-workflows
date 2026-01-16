@@ -191,6 +191,21 @@ class TenantConfig:
         """StarRocks HTTP port (for Stream Load)."""
         return self.merged_config['database'].get('http_port', 8040)
 
+    @property
+    def stream_load_timeout(self) -> int:
+        """Stream Load timeout in seconds."""
+        return self.merged_config.get('stream_load', {}).get('timeout', 900)
+
+    @property
+    def max_error_ratio(self) -> float:
+        """Maximum error ratio for Stream Load."""
+        return self.merged_config.get('stream_load', {}).get('max_error_ratio', 0.0)
+
+    @property
+    def chunk_size(self) -> int:
+        """Chunk size for Stream Load."""
+        return self.merged_config.get('stream_load', {}).get('chunk_size', 8192)
+
     # Path configurations
     @property
     def schema_path(self) -> Path:
@@ -266,6 +281,11 @@ class TenantConfig:
     def storage_provider(self) -> str:
         """Storage provider (azure, aws, gcp, minio, local)."""
         return self.merged_config.get('storage_provider', 'azure')
+
+    @property
+    def azure_connection_string(self) -> str:
+        """Azure Blob Storage connection string (from .env)."""
+        return self.env.get('AZURE_STORAGE_CONNECTION_STRING', '')
 
     @property
     def azure_account_url(self) -> str:
